@@ -16,9 +16,10 @@ interface ProductInstallmentDialogProps {
   product: Product;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  mode: "sealclub" | "normal";
 }
 
-const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstallmentDialogProps) => {
+const ProductInstallmentDialog = ({ product, open, onOpenChange, mode }: ProductInstallmentDialogProps) => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pagseguro");
   const [cardBrand, setCardBrand] = useState<CardBrand>("VISA");
   const [installments, setInstallments] = useState<string>("1");
@@ -31,13 +32,13 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
   // Função helper para parsear valores de preço (string) para número
   const parsePriceString = (priceString: string | null | undefined): number => {
     if (!priceString || typeof priceString !== 'string') return 0;
-    
+
     // Remove símbolos e espaços, mantém apenas números, vírgula e ponto
     const cleaned = priceString.trim().replace(/\s/g, "").replace(/[^\d,.-]/g, "");
-    
+
     // Se após limpar não sobrou nada, retorna 0
     if (!cleaned || cleaned.length === 0) return 0;
-    
+
     // Se tiver vírgula, assume formato brasileiro (1.234,56)
     if (cleaned.includes(",")) {
       // Remove pontos (separadores de milhar) e substitui vírgula por ponto
@@ -45,7 +46,7 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
       const value = parseFloat(normalized);
       return isNaN(value) ? 0 : value;
     }
-    
+
     // Se não tiver vírgula, usa parseFloat direto
     const value = parseFloat(cleaned);
     return isNaN(value) ? 0 : value;
@@ -66,194 +67,109 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
     return parseFloat(cleaned) || 0;
   };
 
-  // Obtém valores do banco de dados
-  // fora_do_club = valor normal (campo no banco)
-  // preco = valor para membros SealClub
-  // Tenta acessar o campo de várias formas possíveis
-  const getForaDoClubValue = (): string | null => {
-    // Converte para any para acessar propriedades dinamicamente
-    const productAny = product as any;
-    
-    // Lista todas as chaves do objeto para debug
-    const allKeys = Object.keys(productAny);
-    console.log('🔍 Todas as chaves do produto:', allKeys);
-    
-    // Procura por qualquer chave que contenha "fora" ou "clube"
-    const matchingKeys = allKeys.filter(key => 
-      key.toLowerCase().includes('fora') || 
-      key.toLowerCase().includes('clube') ||
-      key.toLowerCase().includes('clube')
-    );
-    console.log('🔑 Chaves relacionadas a "fora/clube":', matchingKeys);
-    
-    // Tenta snake_case primeiro (campo real no banco: fora_do_club)
-    if (productAny.fora_do_club !== null && productAny.fora_do_club !== undefined) {
-      const value = String(productAny.fora_do_club).trim();
-      if (value !== '' && value !== 'null' && value !== 'undefined') {
-        console.log('✅ Encontrado em fora_do_club:', value);
-        return value;
-      }
-    }
-    
-    // Tenta o nome com espaços (pode ser como vem do Supabase: "Fora do Clube C/NF")
-    if (productAny["Fora do Clube C/NF"] !== null && productAny["Fora do Clube C/NF"] !== undefined) {
-      const value = String(productAny["Fora do Clube C/NF"]).trim();
-      if (value !== '' && value !== 'null' && value !== 'undefined') {
-        console.log('✅ Encontrado em "Fora do Clube C/NF":', value);
-        return value;
-      }
-    }
-    
-    // Tenta todas as chaves que podem corresponder
-    for (const key of matchingKeys) {
-      const value = productAny[key];
-      if (value !== null && value !== undefined) {
-        const strValue = String(value).trim();
-        if (strValue !== '' && strValue !== 'null' && strValue !== 'undefined') {
-          console.log(`✅ Encontrado em ${key}:`, strValue);
-          return strValue;
-        }
-      }
-    }
-    
-    console.log('❌ Campo fora_do_club não encontrado!');
-    return null;
-  };
-  
-  const foraDoClubValue = getForaDoClubValue();
-  const normalPrice = parsePriceString(foraDoClubValue);
-  console.log('💰 Valor normal calculado:', normalPrice, 'de:', foraDoClubValue);
-  
+  // Preços do banco: fora_do_club = preço normal, preco = preço SealClub
+  // fora_do_club é sempre > preco por definição (preco * 1.08 + 800)
+  const normalPrice = parsePriceString(product.fora_do_club);
   const sealClubPrice = parsePriceString(product.preco);
-  const savings = normalPrice - sealClubPrice;
+  const hasNormalPrice = normalPrice > 0;
+  // A diferença é sempre positiva quando fora_do_club está preenchido
+  const savings = Math.max(0, normalPrice - sealClubPrice);
 
   // Calculate total entry value based on entry type
-  const parsedEntryValue = entryType === "celular_dinheiro" 
+  const parsedEntryValue = entryType === "celular_dinheiro"
     ? parseBrazilianNumber(phoneEntryValue) + parseBrazilianNumber(cashEntryValue)
     : parseBrazilianNumber(entryValue);
   const hasEntry = entryOption === "com";
-  
+
   const remainingNormalPrice = hasEntry ? Math.max(0, normalPrice - parsedEntryValue) : normalPrice;
   const remainingSealClubPrice = hasEntry ? Math.max(0, sealClubPrice - parsedEntryValue) : sealClubPrice;
 
+  // Preço base ativo depende do modo selecionado
+  const activeBasePrice = mode === "sealclub" ? remainingSealClubPrice : remainingNormalPrice;
+
   const installmentData = useMemo(() => {
     if (paymentMethod === "pix") {
-      return { finalValue: remainingSealClubPrice, installmentValue: remainingSealClubPrice, rate: 0 };
+      return { finalValue: activeBasePrice, installmentValue: activeBasePrice, rate: 0 };
     }
     return calculateInstallment(
-      remainingSealClubPrice,
+      activeBasePrice,
       parseInt(installments),
       paymentMethod,
       paymentMethod === "pagseguro" ? cardBrand : undefined
     );
-  }, [remainingSealClubPrice, installments, paymentMethod, cardBrand]);
+  }, [activeBasePrice, installments, paymentMethod, cardBrand]);
 
   // Build product name with storage and condition
   const condition = product.novo_seminovo || '';
   const storage = product.armazenamento ?? null;
-  const productFullName = storage 
+  const productFullName = storage
     ? `${product.produto || 'Produto'} ${storage}${condition ? ` ${condition}` : ''}`
     : `${product.produto || 'Produto'}${condition ? ` ${condition}` : ''}`;
 
   const handleCopy = () => {
-    const normalInstallmentData = calculateInstallment(
-      remainingNormalPrice,
-      parseInt(installments),
-      paymentMethod,
-      paymentMethod === "pagseguro" ? cardBrand : undefined
-    );
+    const brandLabel = cardBrand.charAt(0) + cardBrand.slice(1).toLowerCase();
+    const paymentMethodLabel =
+      paymentMethod === "pix"
+        ? `⚡ Pagamento via PIX`
+        : paymentMethod === "pagseguro"
+          ? `💳 Pagamento via PagSeguro - ${brandLabel}`
+          : `💳 Pagamento via Link de Pagamento`;
 
-    let text = `${productFullName}\n\n`;
+    const entryPrefix = hasEntry
+      ? entryType === "celular"
+        ? `Com o aparelho de entrada`
+        : entryType === "dinheiro"
+          ? `Com a entrada de ${formatCurrency(parsedEntryValue)}`
+          : `Com o aparelho de entrada + ${formatCurrency(parseBrazilianNumber(cashEntryValue))}`
+      : "";
 
-    if (paymentMethod === "pix") {
-      // PIX Templates
-      if (!hasEntry) {
-        // PIX A) SEM ENTRADA
-        text += `🟨 Valor normal:
-💵 À vista no PIX: ${formatCurrency(remainingNormalPrice)}
+    let text = `📱 ${productFullName}\n${paymentMethodLabel}\n`;
+    if (entryPrefix) text += `${entryPrefix}${paymentMethod === "pix" ? ", o restante no PIX fica" : " fica"}:\n`;
+    text += `\n`;
 
-🟦 Para membros SealClub:
-💵 À vista no PIX: ${formatCurrency(remainingSealClubPrice)}
+    const isOnce = installments === "1";
+    const fmtInstallment = (count: string, value: number, total: number) =>
+      isOnce
+        ? `💰 Em ${count}x de ${formatCurrency(value)}`
+        : `💰 Em ${count}x de ${formatCurrency(value)} | Total: ${formatCurrency(total)}`;
 
-💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
-      } else if (entryType === "dinheiro") {
-        // PIX B) ENTRADA EM DINHEIRO
-        text += `Com a entrada de ${formatCurrency(parsedEntryValue)}, o restante no PIX fica:
-
-🟨 Valor normal:
-💵 À vista no PIX: ${formatCurrency(remainingNormalPrice)}
-
-🟦 Para membros SealClub:
-💵 À vista no PIX: ${formatCurrency(remainingSealClubPrice)}
-
-💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
-      } else if (entryType === "celular") {
-        // PIX C) ENTRADA COM CELULAR
-        text += `Com o aparelho de entrada, o restante no PIX fica:
-
-🟨 Valor normal:
-💵 À vista no PIX: ${formatCurrency(remainingNormalPrice)}
-
-🟦 Para membros SealClub:
-💵 À vista no PIX: ${formatCurrency(remainingSealClubPrice)}
-
-💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
+    if (mode === "normal") {
+      // Mensagem simples — apenas o valor para o cliente comum
+      if (paymentMethod === "pix") {
+        text += `💵 À vista no PIX: ${formatCurrency(remainingNormalPrice)}`;
       } else {
-        // PIX D) ENTRADA COM CELULAR + DINHEIRO
-        text += `Com o aparelho de entrada + ${formatCurrency(parseBrazilianNumber(cashEntryValue))}, o restante no PIX fica:
-
-🟨 Valor normal:
-💵 À vista no PIX: ${formatCurrency(remainingNormalPrice)}
-
-🟦 Para membros SealClub:
-💵 À vista no PIX: ${formatCurrency(remainingSealClubPrice)}
-
-💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
+        text += fmtInstallment(installments, installmentData.installmentValue, installmentData.finalValue);
       }
     } else {
-      // Card Templates
-      if (!hasEntry) {
-        // A) SEM ENTRADA
-        text += `🟨 Valor normal:
-💳 Parcelado em ${installments}x de ${formatCurrency(normalInstallmentData.installmentValue)}
+      // Mensagem SealClub — comparação completa com economia
+      const normalInstallmentData = calculateInstallment(
+        remainingNormalPrice,
+        parseInt(installments),
+        paymentMethod,
+        paymentMethod === "pagseguro" ? cardBrand : undefined
+      );
 
-🟦 Para membros SealClub:
-💳 Parcelado em ${installments}x de ${formatCurrency(installmentData.installmentValue)}
-
-💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
-      } else if (entryType === "dinheiro") {
-        // B) ENTRADA EM DINHEIRO
-        text += `Com a entrada de ${formatCurrency(parsedEntryValue)} fica:
-
-🟨 Valor normal:
-💳 Parcelado em ${installments}x de ${formatCurrency(normalInstallmentData.installmentValue)}
-
-🟦 Para membros SealClub:
-💳 Parcelado em ${installments}x de ${formatCurrency(installmentData.installmentValue)}
-
-💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
-      } else if (entryType === "celular") {
-        // C) ENTRADA COM CELULAR
-        text += `Com o aparelho de entrada fica:
-
-🟨 Valor normal:
-💳 Parcelado em ${installments}x de ${formatCurrency(normalInstallmentData.installmentValue)}
-
-🟦 Para membros SealClub:
-💳 Parcelado em ${installments}x de ${formatCurrency(installmentData.installmentValue)}
-
-💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
+      if (paymentMethod === "pix") {
+        if (hasNormalPrice) {
+          text += `🟨 Valor normal:\n`;
+          text += `💵 À vista no PIX: ${formatCurrency(remainingNormalPrice)}\n\n`;
+        }
+        text += `🟦 Para membros SealClub:\n`;
+        text += `💵 À vista no PIX: ${formatCurrency(remainingSealClubPrice)}\n`;
+        if (hasNormalPrice) {
+          text += `\n💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
+        }
       } else {
-        // D) ENTRADA COM CELULAR + DINHEIRO
-        text += `Com o aparelho de entrada + ${formatCurrency(parseBrazilianNumber(cashEntryValue))} fica:
-
-🟨 Valor normal:
-💳 Parcelado em ${installments}x de ${formatCurrency(normalInstallmentData.installmentValue)}
-
-🟦 Para membros SealClub:
-💳 Parcelado em ${installments}x de ${formatCurrency(installmentData.installmentValue)}
-
-💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
+        const economiaParcelado = Math.max(0, normalInstallmentData.finalValue - installmentData.finalValue);
+        if (hasNormalPrice) {
+          text += `🟨 Valor normal:\n`;
+          text += fmtInstallment(installments, normalInstallmentData.installmentValue, normalInstallmentData.finalValue) + `\n\n`;
+        }
+        text += `🟦 Para membros SealClub:\n`;
+        text += fmtInstallment(installments, installmentData.installmentValue, installmentData.finalValue) + `\n`;
+        if (hasNormalPrice) {
+          text += `\n💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
+        }
       }
     }
 
@@ -269,8 +185,13 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
       <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl">{productFullName}</DialogTitle>
+          <p className="text-sm text-muted-foreground pt-1">
+            {mode === "sealclub"
+              ? "🟦 Calculando pelo preço SealClub"
+              : "🟨 Calculando pelo valor normal"}
+          </p>
         </DialogHeader>
-        
+
         <div className="space-y-6 py-4">
           {/* Tipo de Pagamento */}
           <div className="space-y-3">
@@ -418,8 +339,10 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
                   <span className="font-semibold">⚡ PIX (À vista)</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium text-muted-foreground">Valor SealClub:</span>
-                  <span className="text-lg font-bold text-primary">{formatCurrency(remainingSealClubPrice)}</span>
+                  <span className="font-medium text-muted-foreground">
+                    {mode === "sealclub" ? "Valor SealClub:" : "Valor para o cliente:"}
+                  </span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(installmentData.finalValue)}</span>
                 </div>
               </>
             ) : (
@@ -446,27 +369,46 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
             )}
           </div>
 
-          {/* Valores SealClub */}
-          <div className="bg-primary/10 rounded-lg p-4 space-y-2 border border-primary/20">
-            {hasEntry && (
-              <div className="flex justify-between pb-2 border-b border-primary/20">
-                <span className="text-sm text-muted-foreground">Valor da entrada:</span>
-                <span className="font-semibold">{formatCurrency(parsedEntryValue)}</span>
+          {/* Painel de valores — exibição depende do modo */}
+          {mode === "sealclub" ? (
+            <div className="bg-primary/10 rounded-lg p-4 space-y-2 border border-primary/20">
+              {hasEntry && (
+                <div className="flex justify-between pb-2 border-b border-primary/20">
+                  <span className="text-sm text-muted-foreground">Valor da entrada:</span>
+                  <span className="font-semibold">{formatCurrency(parsedEntryValue)}</span>
+                </div>
+              )}
+              {hasNormalPrice && (
+                <div className="flex justify-between">
+                  <span className="text-sm text-muted-foreground">{hasEntry ? "Valor restante normal:" : "Valor normal:"}</span>
+                  <span className="font-semibold">{formatCurrency(hasEntry ? remainingNormalPrice : normalPrice)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">{hasEntry ? "Valor restante SealClub:" : "Para membros SealClub:"}</span>
+                <span className="font-bold text-primary">{formatCurrency(hasEntry ? remainingSealClubPrice : sealClubPrice)}</span>
               </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">{hasEntry ? "Valor restante normal:" : "Valor normal:"}</span>
-              <span className="font-semibold">{formatCurrency(hasEntry ? remainingNormalPrice : normalPrice)}</span>
+              {hasNormalPrice && (
+                <div className="flex justify-between pt-2 border-t border-primary/20">
+                  <span className="text-sm font-medium">Economia imediata:</span>
+                  <span className="font-bold text-green-500">{formatCurrency(savings)}</span>
+                </div>
+              )}
             </div>
-            <div className="flex justify-between">
-              <span className="text-sm text-muted-foreground">{hasEntry ? "Valor restante SealClub:" : "Para membros SealClub:"}</span>
-              <span className="font-bold text-primary">{formatCurrency(hasEntry ? remainingSealClubPrice : sealClubPrice)}</span>
+          ) : (
+            <div className="bg-muted/30 rounded-lg p-4 space-y-2 border border-border">
+              {hasEntry && (
+                <div className="flex justify-between pb-2 border-b border-border">
+                  <span className="text-sm text-muted-foreground">Valor da entrada:</span>
+                  <span className="font-semibold">{formatCurrency(parsedEntryValue)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span className="text-sm text-muted-foreground">{hasEntry ? "Valor restante:" : "Valor para o cliente:"}</span>
+                <span className="font-bold text-foreground">{formatCurrency(hasEntry ? remainingNormalPrice : normalPrice)}</span>
+              </div>
             </div>
-            <div className="flex justify-between pt-2 border-t border-primary/20">
-              <span className="text-sm font-medium">Economia imediata:</span>
-              <span className="font-bold text-success">{formatCurrency(savings)}</span>
-            </div>
-          </div>
+          )}
 
           {/* Botão Copiar */}
           <Button onClick={handleCopy} className="w-full" size="lg">

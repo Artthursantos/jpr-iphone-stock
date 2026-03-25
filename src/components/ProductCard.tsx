@@ -15,6 +15,7 @@ interface ProductCardProps {
 
 const ProductCard = ({ product }: ProductCardProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"sealclub" | "normal">("sealclub");
   const conditionRaw = product.novo_seminovo?.trim().toLowerCase();
   const conditionLabel = conditionRaw === "novo" ? "Novo" : conditionRaw === "seminovo" ? "Seminovo" : undefined;
   const conditionClass =
@@ -55,7 +56,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
 
     return "R$ 0,00";
   };
-  
+
   return (
     <Card className="bg-gradient-card shadow-elegant hover:shadow-hover transition-all duration-300 border-border/50">
       <CardHeader className="pb-3">
@@ -72,7 +73,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
             <span className="text-sm text-foreground">{product.cores}</span>
           </div>
         )}
-        
+
         {product.revendedor && (
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium text-muted-foreground">Revendedor:</span>
@@ -90,7 +91,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
             </Badge>
           </div>
         )}
-        
+
         {product.preco && (
           <div className="flex items-center gap-2 pt-2 border-t border-border/50">
             <span className="text-sm font-medium text-muted-foreground">Preço à vista:</span>
@@ -98,15 +99,25 @@ const ProductCard = ({ product }: ProductCardProps) => {
           </div>
         )}
 
-        <Button 
-          onClick={() => setDialogOpen(true)} 
-          className="w-full mt-3"
-          variant="default"
-        >
-          <Calculator className="mr-2 h-4 w-4" />
-          Calcular Parcelamento
-        </Button>
-        
+        <div className="grid grid-cols-2 gap-2 mt-3">
+          <Button
+            onClick={() => { setDialogMode("sealclub"); setDialogOpen(true); }}
+            variant="default"
+            size="sm"
+          >
+            <Calculator className="mr-1.5 h-3.5 w-3.5" />
+            SealClub
+          </Button>
+          <Button
+            onClick={() => { setDialogMode("normal"); setDialogOpen(true); }}
+            variant="outline"
+            size="sm"
+          >
+            <Calculator className="mr-1.5 h-3.5 w-3.5" />
+            Valor Normal
+          </Button>
+        </div>
+
         {product.created_at && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t border-border/50">
             <span>Atualizado em:</span>
@@ -115,10 +126,11 @@ const ProductCard = ({ product }: ProductCardProps) => {
         )}
       </CardContent>
 
-      <ProductInstallmentDialog 
+      <ProductInstallmentDialog
         product={product}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
+        mode={dialogMode}
       />
     </Card>
   );
