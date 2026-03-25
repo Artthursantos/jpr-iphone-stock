@@ -15,7 +15,6 @@ interface ProductCardProps {
 
 const ProductCard = ({ product }: ProductCardProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [dialogMode, setDialogMode] = useState<"sealclub" | "normal">("sealclub");
   const conditionRaw = product.novo_seminovo?.trim().toLowerCase();
   const conditionLabel = conditionRaw === "novo" ? "Novo" : conditionRaw === "seminovo" ? "Seminovo" : undefined;
   const conditionClass =
@@ -99,22 +98,15 @@ const ProductCard = ({ product }: ProductCardProps) => {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-2 mt-3">
+        <div className="mt-3">
           <Button
-            onClick={() => { setDialogMode("sealclub"); setDialogOpen(true); }}
+            onClick={() => setDialogOpen(true)}
             variant="default"
             size="sm"
+            className="w-full"
           >
             <Calculator className="mr-1.5 h-3.5 w-3.5" />
-            SealClub
-          </Button>
-          <Button
-            onClick={() => { setDialogMode("normal"); setDialogOpen(true); }}
-            variant="outline"
-            size="sm"
-          >
-            <Calculator className="mr-1.5 h-3.5 w-3.5" />
-            Valor Normal
+            Calcular / Copiar Texto
           </Button>
         </div>
 
@@ -130,7 +122,6 @@ const ProductCard = ({ product }: ProductCardProps) => {
         product={product}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        mode={dialogMode}
       />
     </Card>
   );
