@@ -116,6 +116,8 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
       text += `💳 Parcelado em ${installmentCount}x de ${formatCurrency(installmentData.installmentValue)}`;
     }
 
+    text += `\n\n1 ano de garantia pela Seal`;
+
     navigator.clipboard.writeText(text);
     toast({
       title: "Copiado!",
@@ -323,6 +325,7 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
                 ? `💵 À vista no PIX: ${formatCurrency(installmentData.finalValue)}`
                 : `💳 Parcelado em ${installments}x de ${formatCurrency(installmentData.installmentValue)}`}
             </p>
+            <p className="text-sm text-muted-foreground mt-1">1 ano de garantia pela Seal</p>
           </div>
 
           {/* Botão Copiar */}

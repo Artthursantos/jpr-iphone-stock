@@ -91,64 +91,56 @@ const Calculator = () => {
 
   const handleCopy = () => {
     const productFullName = `${productName || "Produto"} ${storage ? `(${storage})` : ""} ${condition}`.trim();
-    
-    let text = `${productFullName}\n\n`;
-    
-    if (paymentMethod === 'pix') {
-      // PIX Templates
-      if (!hasTradeIn && !hasDownPayment) {
-        // PIX A) SEM ENTRADA
-        text += `🟨 Valor normal: 💵 À vista no PIX: ${formatCurrency(baseValueNormal)}\n\n`;
-        text += `🟦 Para membros SealClub: 💵 À vista no PIX: ${formatCurrency(baseValueSealClub)}\n\n`;
-        text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
-      } else if (hasDownPayment && !hasTradeIn) {
-        // PIX B) ENTRADA EM DINHEIRO
-        text += `Com a entrada de ${formatCurrency(parsedDownPayment)}, o restante no PIX fica:\n\n`;
-        text += `🟨 Valor normal: 💵 À vista no PIX: ${formatCurrency(baseValueNormal)}\n\n`;
-        text += `🟦 Para membros SealClub: 💵 À vista no PIX: ${formatCurrency(baseValueSealClub)}\n\n`;
-        text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
-      } else if (hasTradeIn && !hasDownPayment) {
-        // PIX C) ENTRADA COM CELULAR
-        text += `Com o aparelho de entrada, o restante no PIX fica:\n\n`;
-        text += `🟨 Valor normal: 💵 À vista no PIX: ${formatCurrency(baseValueNormal)}\n\n`;
-        text += `🟦 Para membros SealClub: 💵 À vista no PIX: ${formatCurrency(baseValueSealClub)}\n\n`;
-        text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
+    const hasSealClub = parsedSealClubPrice > 0;
+
+    // Entry prefix helper
+    const buildEntryPrefix = (forPix: boolean) => {
+      if (!hasTradeIn && !hasDownPayment) return "";
+      if (hasDownPayment && !hasTradeIn)
+        return `Com a entrada de ${formatCurrency(parsedDownPayment)}${forPix ? ", o restante no PIX fica" : " fica"}`;
+      if (hasTradeIn && !hasDownPayment)
+        return `Com o aparelho de entrada${forPix ? ", o restante no PIX fica" : " fica"}`;
+      return `Com o aparelho de entrada + ${formatCurrency(parsedDownPayment)}${forPix ? ", o restante no PIX fica" : " fica"}`;
+    };
+
+    let text = `📱 ${productFullName}\n`;
+
+    if (!hasSealClub) {
+      // ── MODO SIMPLES (sem SealClub) ── igual ao Sistema de Inventário
+      if (paymentMethod === 'pix') {
+        const prefix = buildEntryPrefix(true);
+        if (prefix) text += `${prefix}:\n\n`;
+        else text += `\n`;
+        text += `💵 À vista no PIX: ${formatCurrency(baseValueNormal)}`;
       } else {
-        // PIX D) ENTRADA COM CELULAR + DINHEIRO
-        text += `Com o aparelho de entrada + ${formatCurrency(parsedDownPayment)}, o restante no PIX fica:\n\n`;
-        text += `🟨 Valor normal: 💵 À vista no PIX: ${formatCurrency(baseValueNormal)}\n\n`;
-        text += `🟦 Para membros SealClub: 💵 À vista no PIX: ${formatCurrency(baseValueSealClub)}\n\n`;
-        text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
+        const installments = parseInt(selectedInstallments);
+        const selectedRow = installmentTable.find(row => row.installments === installments);
+        const prefix = buildEntryPrefix(false);
+        if (prefix) text += `${prefix}:\n\n`;
+        else text += `\n`;
+        if (selectedRow) {
+          text += `💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueNormal)}`;
+        }
       }
+      text += `\n\n1 ano de garantia pela Seal`;
     } else {
-      // CARD Templates (Link de Pagamento / PagSeguro)
-      const installments = parseInt(selectedInstallments);
-      const selectedRow = installmentTable.find(row => row.installments === installments);
-      
-      if (selectedRow) {
-        if (!hasTradeIn && !hasDownPayment) {
-          // A) SEM ENTRADA
-          text += `🟨 Valor normal: 💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueNormal)}\n\n`;
-          text += `🟦 Para membros SealClub: 💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueSealClub)}\n\n`;
-          text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
-        } else if (hasDownPayment && !hasTradeIn) {
-          // B) ENTRADA EM DINHEIRO
-          text += `Com a entrada de ${formatCurrency(parsedDownPayment)} fica:\n\n`;
-          text += `🟨 Valor normal: 💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueNormal)}\n\n`;
-          text += `🟦 Para membros SealClub: 💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueSealClub)}\n\n`;
-          text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
-        } else if (hasTradeIn && !hasDownPayment) {
-          // C) ENTRADA COM CELULAR
-          text += `Com o aparelho de entrada fica:\n\n`;
-          text += `🟨 Valor normal: 💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueNormal)}\n\n`;
-          text += `🟦 Para membros SealClub: 💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueSealClub)}\n\n`;
-          text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
-        } else {
-          // D) ENTRADA COM CELULAR + DINHEIRO
-          text += `Com o aparelho de entrada + ${formatCurrency(parsedDownPayment)} fica:\n\n`;
-          text += `🟨 Valor normal: 💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueNormal)}\n\n`;
-          text += `🟦 Para membros SealClub: 💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueSealClub)}\n\n`;
-          text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro`;
+      // ── MODO COMPLETO (com comparação SealClub) ──
+      text += `\n`;
+      if (paymentMethod === 'pix') {
+        const prefix = buildEntryPrefix(true);
+        if (prefix) text += `${prefix}:\n\n`;
+        text += `🟨 Valor normal:\n💵 À vista no PIX: ${formatCurrency(baseValueNormal)}\n\n`;
+        text += `🟦 Para membros SealClub:\n💵 À vista no PIX: ${formatCurrency(baseValueSealClub)}\n\n`;
+        text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro\n1 ano de garantia pela Seal`;
+      } else {
+        const installments = parseInt(selectedInstallments);
+        const selectedRow = installmentTable.find(row => row.installments === installments);
+        const prefix = buildEntryPrefix(false);
+        if (prefix) text += `${prefix}:\n\n`;
+        if (selectedRow) {
+          text += `🟨 Valor normal:\n💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueNormal)}\n\n`;
+          text += `🟦 Para membros SealClub:\n💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueSealClub)}\n\n`;
+          text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro\n1 ano de garantia pela Seal`;
         }
       }
     }
