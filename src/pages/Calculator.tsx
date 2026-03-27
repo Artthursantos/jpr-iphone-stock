@@ -93,6 +93,10 @@ const Calculator = () => {
     const productFullName = `${productName || "Produto"} ${storage ? `(${storage})` : ""} ${condition}`.trim();
     const hasSealClub = parsedSealClubPrice > 0;
 
+    const warrantyText = condition.toLowerCase() === 'seminovo'
+      ? '1 ano de garantia pela Seal'
+      : '1 ano de garantia pela Apple';
+
     // Entry prefix helper
     const buildEntryPrefix = (forPix: boolean) => {
       if (!hasTradeIn && !hasDownPayment) return "";
@@ -122,7 +126,7 @@ const Calculator = () => {
           text += `💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueNormal)}`;
         }
       }
-      text += `\n\n1 ano de garantia pela Seal`;
+      text += `\n\n${warrantyText}`;
     } else {
       // ── MODO COMPLETO (com comparação SealClub) ──
       text += `\n`;
@@ -131,7 +135,7 @@ const Calculator = () => {
         if (prefix) text += `${prefix}:\n\n`;
         text += `🟨 Valor normal:\n💵 À vista no PIX: ${formatCurrency(baseValueNormal)}\n\n`;
         text += `🟦 Para membros SealClub:\n💵 À vista no PIX: ${formatCurrency(baseValueSealClub)}\n\n`;
-        text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro\n1 ano de garantia pela Seal`;
+        text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro\n${warrantyText}`;
       } else {
         const installments = parseInt(selectedInstallments);
         const selectedRow = installmentTable.find(row => row.installments === installments);
@@ -140,7 +144,7 @@ const Calculator = () => {
         if (selectedRow) {
           text += `🟨 Valor normal:\n💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueNormal)}\n\n`;
           text += `🟦 Para membros SealClub:\n💳 Parcelado em ${installments}x de ${formatCurrency(selectedRow.installmentValueSealClub)}\n\n`;
-          text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro\n1 ano de garantia pela Seal`;
+          text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro\n${warrantyText}`;
         }
       }
     }
