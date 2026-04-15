@@ -156,8 +156,10 @@ export const calculateInstallment = (
   brand?: CardBrand
 ) => {
   const rate = getRate(installments, method, brand);
-  const finalValue = baseValue * (1 + rate / 100);
-  const installmentValue = finalValue / installments;
+  // O cálculo correto para que você receba líquido o baseValue é dividir por (1 - taxa),
+  // e não multiplicar por (1 + taxa).
+  const finalValue = rate > 0 ? baseValue / (1 - rate / 100) : baseValue;
+  const installmentValue = installments > 0 ? finalValue / installments : finalValue;
   
   return {
     finalValue,

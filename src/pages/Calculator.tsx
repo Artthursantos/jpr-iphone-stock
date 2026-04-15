@@ -109,6 +109,8 @@ const Calculator = () => {
 
     let text = `📱 ${productFullName}\n`;
 
+    const warrantyText = condition?.toLowerCase() === 'novo' ? '1 ano de garantia pela Apple' : '1 ano de garantia pela Seal';
+
     if (!hasSealClub) {
       // ── MODO SIMPLES (sem SealClub) ── igual ao Sistema de Inventário
       if (paymentMethod === 'pix') {

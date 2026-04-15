@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import Calculator from "./pages/Calculator";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Matching from "./pages/Matching";
 import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -29,6 +30,11 @@ const App = () => (
             <Route path="/calculator" element={
               <ProtectedRoute>
                 <Calculator />
+              </ProtectedRoute>
+            } />
+            <Route path="/matching" element={
+              <ProtectedRoute>
+                <Matching />
               </ProtectedRoute>
             } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

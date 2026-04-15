@@ -38,6 +38,66 @@ export type Database = {
         }
         Relationships: []
       }
+      leads: {
+        Row: {
+          armazenamento_desejado: string | null
+          armazenamento_entrada: string | null
+          created_at: string | null
+          id: number
+          interesse: string | null
+          kommo_lead_id: string | null
+          modelo_desejado: string
+          modelo_entrada: string | null
+          nome: string
+          orcamento: number | null
+          origem: string | null
+          responsavel: string | null
+          status: string | null
+          temperatura: string | null
+          tipo: string
+          updated_at: string | null
+          urgencia: string | null
+        }
+        Insert: {
+          armazenamento_desejado?: string | null
+          armazenamento_entrada?: string | null
+          created_at?: string | null
+          id?: never
+          interesse?: string | null
+          kommo_lead_id?: string | null
+          modelo_desejado: string
+          modelo_entrada?: string | null
+          nome: string
+          orcamento?: number | null
+          origem?: string | null
+          responsavel?: string | null
+          status?: string | null
+          temperatura?: string | null
+          tipo?: string
+          updated_at?: string | null
+          urgencia?: string | null
+        }
+        Update: {
+          armazenamento_desejado?: string | null
+          armazenamento_entrada?: string | null
+          created_at?: string | null
+          id?: never
+          interesse?: string | null
+          kommo_lead_id?: string | null
+          modelo_desejado?: string
+          modelo_entrada?: string | null
+          nome?: string
+          orcamento?: number | null
+          origem?: string | null
+          responsavel?: string | null
+          status?: string | null
+          temperatura?: string | null
+          tipo?: string
+          updated_at?: string | null
+          urgencia?: string | null
+        }
+        Relationships: []
+      }
       produtos: {
         Row: {
           armazenamento: string | null
