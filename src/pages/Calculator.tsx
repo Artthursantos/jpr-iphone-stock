@@ -93,10 +93,6 @@ const Calculator = () => {
     const productFullName = `${productName || "Produto"} ${storage ? `(${storage})` : ""} ${condition}`.trim();
     const hasSealClub = parsedSealClubPrice > 0;
 
-    const warrantyText = condition.toLowerCase() === 'seminovo'
-      ? '1 ano de garantia pela Seal'
-      : '1 ano de garantia pela Apple';
-
     // Entry prefix helper
     const buildEntryPrefix = (forPix: boolean) => {
       if (!hasTradeIn && !hasDownPayment) return "";

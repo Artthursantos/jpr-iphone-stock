@@ -119,8 +119,7 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
     } else {
       text += `💳 Parcelado em ${installmentCount}x de ${formatCurrency(installmentData.installmentValue)}`;
     }
-
-    text += `\n\n${warrantyText}`;   
+    text += `\n\n${warrantyText}`;
 
     navigator.clipboard.writeText(text);
     toast({
