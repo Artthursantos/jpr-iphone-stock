@@ -88,6 +88,7 @@ serve(async (req) => {
        let urgencia = "longo_prazo";
        let temperatura = "frio";
        let interesse = "comprar_seminovo";
+       let stageValue = ""; // capture stage/etapa field when present
 
        if (lead.custom_fields_values) {
           for (const field of lead.custom_fields_values) {
@@ -95,9 +96,14 @@ serve(async (req) => {
               const valObj = field.values && field.values.length > 0 ? field.values[0] : null;
               if (!valObj) continue;
               
-              // Kommo retorna freq\u00FCentemente o texto em enum_code ou value
+              // Kommo retorna frequentemente o texto em enum_code ou value
               const value = String(valObj.value || valObj.enum_code || "").toLowerCase();
               
+              // Capture possible stage/etapa fields
+              if (name.includes("etapa") || name.includes("stage") || name.includes("etapa de")) {
+                stageValue = String(valObj.value || valObj.enum_code || "").toLowerCase();
+              }
+
               if (name === "modelo de aparelho") modelo_desejado = String(valObj.value);
               else if (name === "modelo atual" || name === "aparelho de entrada") modelo_entrada = String(valObj.value);
               else if (name.includes("urg\u00EAncia")) {
@@ -110,6 +116,22 @@ serve(async (req) => {
               }
               else if (name.includes("interesse")) interesse = String(valObj.value);
           }
+       }
+
+       const statusName = String(lead.status_name || lead.status?.name || "").toLowerCase();
+      const statusId = String(lead.status_id || lead.status?.id || "");
+      const closedWonId = Deno.env.get("KOMMO_STATUS_WON_ID") || "142";
+      const closedLostId = Deno.env.get("KOMMO_STATUS_LOST_ID") || "143";
+
+       // If stage/status indicates closed-won or closed-lost, skip lead
+       if (stageValue && (stageValue.includes("venda ganha") || stageValue.includes("venda perdida"))) {
+         return null;
+       }
+       if (statusName && (statusName.includes("venda ganha") || statusName.includes("venda perdida"))) {
+         return null;
+       }
+       if ((closedWonId && statusId === closedWonId) || (closedLostId && statusId === closedLostId)) {
+         return null;
        }
 
        // Se n\u00A0o tem modelo_desejado, skipamos o lead porque n\u00A0o \u00E9 de iphone especificamente

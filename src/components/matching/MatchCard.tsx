@@ -1,151 +1,146 @@
-import { Match } from "@/hooks/useMatching";
+import React from "react";
+import { MatchGroup } from "@/hooks/useMatching";
+import { BuyerCard } from "./BuyerCard";
 import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Calculator, MessageCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { MessageCircle, Check } from "lucide-react";
 import { formatCurrency } from "@/lib/installmentRates";
 
 interface MatchCardProps {
-  match: Match;
+  match: MatchGroup;
+  onRemoveTradeIn?: (tradeInId: string) => void;
+  onRemoveBuyer?: (buyerId: string) => void;
 }
 
-export const MatchCard = ({ match }: MatchCardProps) => {
-  const { tradeInLead: tradeIn, buyerLead: buyer, score, scoreLabel, potentialValue } = match;
+const GREEN = "#22c55e";
+const BLUE = "#3a7fd4";
 
-  const getBorderColor = () => {
-    if (score === 100) return "border-l-green-500";
-    if (score === 85) return "border-l-orange-500";
-    return "border-l-yellow-500";
+const borderColorForScore = (score: number) => {
+  if (score === 100) return GREEN;
+  if (score === 85) return "#f97316"; // orange
+  return "#f59e0b"; // yellow
+};
+
+export const MatchCard: React.FC<MatchCardProps> = ({ match, onRemoveTradeIn, onRemoveBuyer }) => {
+  const { tradeInLead: tradeIn, buyers, bestScore, totalPotential } = match;
+  const getBuyerChance = (buyerLead: MatchGroup["buyers"][number]["buyerLead"]) => {
+    const temp = (buyerLead.temperatura || "").toLowerCase();
+    const urgency = (buyerLead.urgencia || "").toLowerCase();
+    const isHot = temp === "quente";
+    const isWarm = temp === "morno";
+    const isFast = urgency === "curto_prazo" || urgency === "imediata" || urgency === "rapida" || urgency === "rápida";
+
+    let score = 0;
+    if (isHot) score += 60;
+    else if (isWarm) score += 40;
+    else score += 20;
+
+    if (isFast) score += 40;
+
+    return Math.min(100, score);
   };
 
-  const getBadgeColor = () => {
-    if (score === 100) return "bg-green-500/10 text-green-500 hover:bg-green-500/20";
-    if (score === 85) return "bg-orange-500/10 text-orange-500 hover:bg-orange-500/20";
-    return "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20";
-  };
+  const sortedBuyers = [...buyers].sort((a, b) => {
+    const aChance = getBuyerChance(a.buyerLead);
+    const bChance = getBuyerChance(b.buyerLead);
+    return bChance - aChance;
+  });
 
-  const getUrgencyText = (u: string | null) => {
-    if (u === 'imediata') return 'Urgência: imediata';
-    if (u === 'curto_prazo') return 'Urgência: curto prazo';
-    return 'Urgência: longo prazo';
-  };
-
-  const getTempText = (t: string | null) => {
-    if (t === 'quente') return 'Temp: Quente';
-    if (t === 'morno') return 'Temp: Morno';
-    return 'Temp: Frio';
-  };
+  const borderColor = borderColorForScore(bestScore);
 
   return (
-    <div className={`mt-4 rounded-xl border border-border bg-card/40 p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden border-l-[3px] ${getBorderColor()}`}>
-      
-      {/* Top Header */}
-      <div className="flex justify-between items-start mb-6">
-        <Badge className={`rounded-full px-3 py-1 font-medium border-none ${getBadgeColor()}`}>
-          {scoreLabel}
-        </Badge>
-        
-        <div className="text-right">
-          <div className="flex items-center gap-1.5 justify-end">
-            <span className="text-lg font-bold text-green-500">{formatCurrency(potentialValue)}</span>
-            <span className="text-sm text-muted-foreground">potencial</span>
+    <div
+      className="mt-4 rounded-xl border bg-card/40 p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden min-h-[300px]"
+      style={{ borderLeft: `3px solid ${borderColor}` }}
+    >
+      {/* Top: trade-in info & actions */}
+      <div className="flex items-start justify-between mb-4 gap-4">
+        <div className="flex-1">
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 mb-2">
+            <div>
+              <div className="flex items-center gap-3">
+                <h3 className="text-base font-bold text-foreground truncate">{tradeIn.nome}</h3>
+
+                <Badge className="text-xs font-normal" style={{ backgroundColor: `${GREEN}1A`, color: GREEN, borderColor: `${GREEN}33` }}>
+                  trade-in
+                </Badge>
+              </div>
+              <div className="mt-1 text-base font-semibold text-foreground">
+                {tradeIn.modelo_entrada || "-"} {tradeIn.armazenamento_entrada || ""}
+              </div>
+            </div>
+
+            <div className="text-xs text-muted-foreground flex flex-wrap items-center justify-center gap-2">
+              <span className="px-3 py-1 rounded-full border border-border/50 bg-card/60">
+                {tradeIn.urgencia ? `Urgência: ${tradeIn.urgencia}` : "Urgência: —"}
+              </span>
+              <span className="px-3 py-1 rounded-full border border-border/50 bg-card/60">
+                {tradeIn.temperatura ? `Temperatura: ${tradeIn.temperatura}` : "Temperatura: —"}
+              </span>
+              <span className="px-3 py-1 rounded-full border border-border/50 bg-card/60">
+                {tradeIn.interesse ? `Etapa: ${tradeIn.interesse}` : "Etapa: —"}
+              </span>
+            </div>
+
+            <div />
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end gap-2">
+          {tradeIn.kommo_lead_id && (
+            <a
+              href={`https://sealstore.kommo.com/leads/detail/${tradeIn.kommo_lead_id}`}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="text-xs font-semibold px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-500 transition-colors text-center min-w-[96px]"
+              title="Abrir conversa no Kommo"
+            >
+              Conversa
+            </a>
+          )}
+
+          <button
+            onClick={() => onRemoveTradeIn?.(String(tradeIn.id))}
+            className="text-xs font-semibold px-3 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-500 transition-colors text-center min-w-[96px]"
+            title="Completar / remover lead"
+          >
+            Concluir
+          </button>
+          <div className="text-sm mt-1">
+            <span className="text-muted-foreground">Potencial:</span> <span className="font-semibold" style={{ color: GREEN }}>{formatCurrency(totalPotential)}</span>
           </div>
         </div>
       </div>
 
-      {/* Leads Columns */}
-      <div className="flex items-center justify-between gap-4 mb-6">
-        
-        {/* Trade-in Lead */}
-        <div className="flex-1 bg-secondary/50 rounded-lg p-4 border border-border/50">
-          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Lead Trade-in</p>
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <h4 className="text-base font-bold text-foreground truncate">{tradeIn.nome}</h4>
-            {tradeIn.kommo_lead_id && (
-              <a 
-                href={`https://sealstore.kommo.com/leads/detail/${tradeIn.kommo_lead_id}`}
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="shrink-0 flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-green-500 transition-colors bg-background/50 hover:bg-green-500/10 px-2 py-1.5 rounded-md border border-border/50 hover:border-green-500/30"
-                title="Abrir conversa no Kommo"
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                Ir até a conversa
-              </a>
-            )}
-          </div>
-          
-          <div className="space-y-1 mb-3">
-            <p className="text-sm text-foreground">
-              <span className="text-muted-foreground">Quer:</span> {tradeIn.modelo_desejado} {tradeIn.armazenamento_desejado || ""}
-            </p>
-            <p className="text-sm text-foreground">
-              <span className="text-muted-foreground">Tem:</span> {tradeIn.modelo_entrada} {tradeIn.armazenamento_entrada || ""}
-            </p>
-          </div>
 
-          <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20 font-normal">
-            trade-in
-          </Badge>
+      {/* Buyers horizontal scroll */}
+      <div className="mb-4">
+        <div className="flex items-baseline justify-between mb-2">
+          <h4 className="text-sm font-semibold">Compradores Compatíveis ({buyers.length})</h4>
         </div>
 
-        {/* Arrow */}
-        <div className="text-muted-foreground shrink-0">
-          <ArrowRight className="h-5 w-5 opacity-50" />
-        </div>
-
-        {/* Buyer Lead */}
-        <div className="flex-1 bg-secondary/50 rounded-lg p-4 border border-border/50">
-          <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Lead Comprador</p>
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <h4 className="text-base font-bold text-foreground truncate">{buyer.nome}</h4>
-            {buyer.kommo_lead_id && (
-              <a 
-                href={`https://sealstore.kommo.com/leads/detail/${buyer.kommo_lead_id}`}
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="shrink-0 flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-blue-500 transition-colors bg-background/50 hover:bg-blue-500/10 px-2 py-1.5 rounded-md border border-border/50 hover:border-blue-500/30"
-                title="Abrir conversa no Kommo"
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-                Ir até a conversa
-              </a>
-            )}
-          </div>
-          
-          <div className="space-y-1 mb-3">
-            <p className="text-sm text-foreground">
-              <span className="text-muted-foreground">Quer:</span> {buyer.modelo_desejado} {buyer.armazenamento_desejado || ""}
-            </p>
-            <p className="text-sm text-foreground">
-              <span className="text-muted-foreground">Orçamento:</span> {buyer.orcamento ? formatCurrency(buyer.orcamento) : "Sem orçamento"}
-            </p>
+        <div className="relative">
+          <div className="flex gap-3 overflow-x-auto pb-2 matching-scrollbar" style={{ WebkitOverflowScrolling: "touch" }}>
+            {sortedBuyers.map((b) => (
+              <BuyerCard
+                key={b.id}
+                buyer={b}
+                matchChance={getBuyerChance(b.buyerLead)}
+                onRemove={(id) => onRemoveBuyer?.(id)}
+              />
+            ))}
           </div>
 
-          <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/20 font-normal">
-            comprador
-          </Badge>
+          {/* Right-side fade overlay */}
+          <div className="pointer-events-none absolute top-0 right-0 h-full w-20" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.08) 100%)' }} />
         </div>
 
+        <div className="text-xs text-muted-foreground text-right mt-2">← deslize →</div>
       </div>
 
-      {/* Footer Tags & Actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-border/50 mt-2">
-        <div className="flex gap-2">
-          <Badge variant="secondary" className="bg-background/50 font-normal text-muted-foreground border-border/50">
-            {getUrgencyText(buyer.urgencia)}
-          </Badge>
-          <Badge variant="secondary" className="bg-background/50 font-normal text-muted-foreground border-border/50">
-            {getTempText(buyer.temperatura)}
-          </Badge>
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" className="h-8 shadow-none group">
-            Calcular entrada <Calculator className="h-3.5 w-3.5 ml-2 text-muted-foreground group-hover:text-foreground transition-colors" />
-          </Button>
-        </div>
-      </div>
-
+      {/* Footer spacer */}
+      <div className="pt-2" />
     </div>
   );
 };
+
+export default MatchCard;

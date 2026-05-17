@@ -24,3 +24,9 @@ dist-ssr
 *.sw?
 
 .vscode
+
+credentialsgoogle.json
+.env
+debug.json
+sample_output.json
+supabase/.temp/

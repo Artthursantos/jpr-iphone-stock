@@ -1,13 +1,12 @@
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Copy } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import { calculateInstallment, formatCurrency, PaymentMethod, CardBrand, INSTALLMENT_RATES } from "@/lib/installmentRates";
+import { calculateInstallment, formatCurrency, PaymentMethod, CardBrand } from "@/lib/installmentRates";
 import { toast } from "@/hooks/use-toast";
 
 type Product = Database['public']['Tables']['produtos']['Row'];
@@ -18,7 +17,51 @@ interface ProductInstallmentDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+type PaymentType = "pix" | "credit_card" | "payment_link";
+
+const GATEWAY_OPTIONS: Record<Exclude<PaymentType, "pix">, { value: PaymentMethod; label: string }[]> = {
+  credit_card: [
+    { value: "pagseguro", label: "PagSeguro" },
+    { value: "cielo_machine", label: "Cielo" },
+    { value: "liqd_finance", label: "Liqd Finance" },
+  ],
+  payment_link: [
+    { value: "link", label: "Mercado Pago" },
+    { value: "cielo_link", label: "Cielo (Link)" },
+  ],
+};
+
+const BRAND_OPTIONS: Record<PaymentMethod, CardBrand[]> = {
+  pix: [],
+  pagseguro: ["VISA", "MASTER", "ELO", "HIPER", "DEMAIS"],
+  cielo_machine: ["VISA", "MASTER"],
+  liqd_finance: ["VISA", "MASTER", "ELO", "AMEX", "HIPERCARD"],
+  link: ["VISA", "MASTER", "ELO", "HIPER", "DEMAIS"],
+  cielo_link: ["VISA", "MASTER", "ELO", "AMEX", "DINERS"],
+};
+
+const MAX_INSTALLMENTS_BY_GATEWAY: Record<PaymentMethod, number> = {
+  pix: 1,
+  pagseguro: 18,
+  cielo_machine: 18,
+  liqd_finance: 18,
+  link: 12,
+  cielo_link: 12,
+};
+
+const BRAND_LABELS: Record<CardBrand, string> = {
+  VISA: "Visa",
+  MASTER: "Master",
+  ELO: "Elo",
+  HIPER: "Hiper",
+  DEMAIS: "Demais",
+  AMEX: "Amex",
+  HIPERCARD: "Hipercard",
+  DINERS: "Diners",
+};
+
 const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstallmentDialogProps) => {
+  const [paymentType, setPaymentType] = useState<PaymentType>("credit_card");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pagseguro");
   const [cardBrand, setCardBrand] = useState<CardBrand>("VISA");
   const [installments, setInstallments] = useState<string>("1");
@@ -63,18 +106,49 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
   const hasEntry = entryOption === "com";
 
   const activeBasePrice = hasEntry ? Math.max(0, basePrice - parsedEntryValue) : basePrice;
+  const isPix = paymentType === "pix";
+  const gatewayOptions = paymentType === "pix" ? [] : GATEWAY_OPTIONS[paymentType];
+  const selectedBrandOptions = BRAND_OPTIONS[paymentMethod] || [];
+  const maxInstallments = MAX_INSTALLMENTS_BY_GATEWAY[paymentMethod] || 12;
+  const installmentOptions = Array.from({ length: maxInstallments }, (_, index) => String(index + 1));
+
+  const handlePaymentTypeChange = (value: PaymentType) => {
+    setPaymentType(value);
+    setInstallments("1");
+
+    if (value === "pix") {
+      setPaymentMethod("pix");
+      setCardBrand("VISA");
+      return;
+    }
+
+    const defaultGateway = GATEWAY_OPTIONS[value][0].value;
+    const defaultBrand = BRAND_OPTIONS[defaultGateway][0];
+    setPaymentMethod(defaultGateway);
+    setCardBrand(defaultBrand);
+  };
+
+  const handleGatewayChange = (value: PaymentMethod) => {
+    setPaymentMethod(value);
+    setInstallments("1");
+    const defaultBrand = BRAND_OPTIONS[value][0];
+    if (defaultBrand) {
+      setCardBrand(defaultBrand);
+    }
+  };
 
   const installmentData = useMemo(() => {
-    if (paymentMethod === "pix") {
+    if (isPix) {
       return { finalValue: activeBasePrice, installmentValue: activeBasePrice, rate: 0 };
     }
+
     return calculateInstallment(
       activeBasePrice,
       parseInt(installments),
       paymentMethod,
-      paymentMethod === "pagseguro" ? cardBrand : undefined
+      cardBrand
     );
-  }, [activeBasePrice, installments, paymentMethod, cardBrand]);
+  }, [activeBasePrice, installments, paymentMethod, cardBrand, isPix]);
 
   // Build display name: "Nome Armazenamento Condição"
   const condition = product.novo_seminovo?.trim() || '';
@@ -107,14 +181,14 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
     let text = `📱 ${productHeader}\n`;
 
     if (entryPrefix) {
-      text += paymentMethod === "pix"
+      text += isPix
         ? `${entryPrefix}, o restante no PIX fica:\n\n`
         : `${entryPrefix} fica:\n\n`;
     } else {
       text += `\n`;
     }
 
-    if (paymentMethod === "pix") {
+    if (isPix) {
       text += `💵 À vista no PIX: ${formatCurrency(installmentData.finalValue)}`;
     } else {
       text += `💳 Parcelado em ${installmentCount}x de ${formatCurrency(installmentData.installmentValue)}`;
@@ -142,53 +216,58 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
           {/* Tipo de Pagamento */}
           <div className="space-y-3">
             <Label className="text-base font-semibold">Tipo de pagamento</Label>
-            <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="pix" id="pix" />
-                <Label htmlFor="pix" className="cursor-pointer">PIX</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="pagseguro" id="pagseguro" />
-                <Label htmlFor="pagseguro" className="cursor-pointer">PagSeguro</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="link" id="link" />
-                <Label htmlFor="link" className="cursor-pointer">Link de Pagamento</Label>
-              </div>
-            </RadioGroup>
+            <Select value={paymentType} onValueChange={(value) => handlePaymentTypeChange(value as PaymentType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pix">PIX</SelectItem>
+                <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
+                <SelectItem value="payment_link">Link de Pagamento</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Bandeira (só se PagSeguro) */}
-          {paymentMethod === "pagseguro" && (
+          {/* Gateway (só para cartão/link) */}
+          {!isPix && (
             <div className="space-y-3">
-              <Label className="text-base font-semibold">Bandeira</Label>
-              <RadioGroup value={cardBrand} onValueChange={(value) => setCardBrand(value as CardBrand)}>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="VISA" id="visa" />
-                  <Label htmlFor="visa" className="cursor-pointer">Visa</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="MASTER" id="master" />
-                  <Label htmlFor="master" className="cursor-pointer">Master</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="ELO" id="elo" />
-                  <Label htmlFor="elo" className="cursor-pointer">Elo</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="HIPER" id="hiper" />
-                  <Label htmlFor="hiper" className="cursor-pointer">Hiper</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="DEMAIS" id="demais" />
-                  <Label htmlFor="demais" className="cursor-pointer">Demais</Label>
-                </div>
-              </RadioGroup>
+              <Label className="text-base font-semibold">Gateway de pagamento</Label>
+              <Select value={paymentMethod} onValueChange={(value) => handleGatewayChange(value as PaymentMethod)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {gatewayOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
 
-          {/* Número de Parcelas (não mostra para PIX) */}
-          {paymentMethod !== "pix" && (
+          {/* Bandeira (após gateway) */}
+          {!isPix && selectedBrandOptions.length > 0 && (
+            <div className="space-y-3">
+              <Label className="text-base font-semibold">Bandeira</Label>
+              <Select value={cardBrand} onValueChange={(value) => setCardBrand(value as CardBrand)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectedBrandOptions.map((brand) => (
+                    <SelectItem key={brand} value={brand}>
+                      {BRAND_LABELS[brand]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Número de Parcelas (após bandeira) */}
+          {!isPix && cardBrand && (
             <div className="space-y-3">
               <Label className="text-base font-semibold">Número de parcelas</Label>
               <Select value={installments} onValueChange={setInstallments}>
@@ -196,9 +275,9 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.keys(INSTALLMENT_RATES).filter(key => key !== 'debito').map((key) => (
-                    <SelectItem key={key} value={key}>
-                      {key}x
+                  {installmentOptions.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value}x
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -287,7 +366,7 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
                 <span className="font-semibold">- {formatCurrency(parsedEntryValue)}</span>
               </div>
             )}
-            {paymentMethod === "pix" ? (
+            {isPix ? (
               <div className="flex justify-between border-t border-border pt-2">
                 <span className="font-medium text-muted-foreground">Valor PIX:</span>
                 <span className="text-lg font-bold text-primary">{formatCurrency(installmentData.finalValue)}</span>
@@ -324,7 +403,7 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
               </p>
             )}
             <p className="text-sm">
-              {paymentMethod === "pix"
+              {isPix
                 ? `💵 À vista no PIX: ${formatCurrency(installmentData.finalValue)}`
                 : `💳 Parcelado em ${installments}x de ${formatCurrency(installmentData.installmentValue)}`}
             </p>

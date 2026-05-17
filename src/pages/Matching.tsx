@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { useMatching, Match } from "@/hooks/useMatching";
 import { MatchCard } from "@/components/matching/MatchCard";
 import { MatchStats } from "@/components/matching/MatchStats";
-import { LeadFormDialog } from "@/components/matching/LeadFormDialog";
+import { Badge } from "@/components/ui/badge";
 import { useLeads } from "@/hooks/useLeads";
 import { RefreshCw } from "lucide-react";
 
@@ -25,22 +25,43 @@ const Matching = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState<"active" | "concluded">("active");
+  const [concludedIds, setConcludedIds] = useState<string[]>([]);
   const itemsPerPage = 10;
+
+  const uniqueMatches = Array.from(
+    matches.reduce((map, match) => {
+      const nameKey = (match.tradeInLead.nome || "").trim().toLowerCase();
+      const modelKey = (match.tradeInLead.modelo_entrada || "").trim().toLowerCase();
+      const storageKey = (match.tradeInLead.armazenamento_entrada || "").trim().toLowerCase();
+      const normalizedKey = `${nameKey}::${modelKey}::${storageKey}`;
+      const idKey = match.tradeInLead.kommo_lead_id || String(match.tradeInLead.id);
+      const key = normalizedKey !== "::" ? normalizedKey : idKey;
+
+      if (!map.has(key)) map.set(key, match);
+      return map;
+    }, new Map<string, Match>())
+  ).map(([, value]) => value);
   
   // Filter matches based on search term
-  const filteredMatches = matches.filter(match => {
+  const filteredMatches = uniqueMatches.filter(match => {
+    // Exclude concluded trade-ins from the active matching list
+    if (concludedIds.includes(String(match.tradeInLead.id))) return false;
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
     
-    return (
-      match.tradeInLead.nome.toLowerCase().includes(term) ||
-      match.buyerLead.nome.toLowerCase().includes(term) ||
-      (match.tradeInLead.modelo_entrada || "").toLowerCase().includes(term) ||
-      (match.buyerLead.modelo_desejado || "").toLowerCase().includes(term) ||
-      (match.tradeInLead.armazenamento_entrada || "").toLowerCase().includes(term) ||
-      (match.buyerLead.armazenamento_desejado || "").toLowerCase().includes(term)
+    if (match.tradeInLead.nome.toLowerCase().includes(term)) return true;
+    if ((match.tradeInLead.modelo_entrada || "").toLowerCase().includes(term)) return true;
+    if ((match.tradeInLead.armazenamento_entrada || "").toLowerCase().includes(term)) return true;
+
+    return match.buyers.some((buyer) =>
+      buyer.buyerLead.nome.toLowerCase().includes(term) ||
+      (buyer.buyerLead.modelo_desejado || "").toLowerCase().includes(term) ||
+      (buyer.buyerLead.armazenamento_desejado || "").toLowerCase().includes(term)
     );
   });
+
+  const concludedMatches = uniqueMatches.filter((m) => concludedIds.includes(String(m.tradeInLead.id)));
 
   // Reset page to 1 when search changes
   useEffect(() => {
@@ -144,13 +165,33 @@ const Matching = () => {
                 <RefreshCw className={`h-4 w-4 mr-2 ${syncKommo.isPending ? 'animate-spin' : ''}`} />
                 {syncKommo.isPending ? "Sincronizando..." : "Sincronizar Kommo"}
               </Button>
-              <LeadFormDialog />
+
+              <div className="inline-flex items-center rounded-md border border-border bg-card/30 p-1">
+                <button
+                  onClick={() => setActiveTab("active")}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 ${activeTab === 'active' ? 'bg-red-500/10 text-foreground' : 'text-muted-foreground'}`}
+                >
+                  Matching ativo
+                  <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white">
+                    {uniqueMatches.filter(m => !concludedIds.includes(String(m.tradeInLead.id))).length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setActiveTab("concluded")}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md flex items-center gap-2 ${activeTab === 'concluded' ? 'bg-muted-foreground/10 text-foreground' : 'text-muted-foreground'}`}
+                >
+                  Leads concluídos
+                  <span className="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs font-semibold rounded-full bg-muted-foreground/10 text-muted-foreground">
+                    {concludedIds.length}
+                  </span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Stats */}
-        <MatchStats matches={matches} />
+        <MatchStats matches={uniqueMatches} />
 
         {/* Loading State */}
         {isLoading && (
@@ -165,19 +206,19 @@ const Matching = () => {
             <p className="text-foreground font-medium mb-2">Nenhum match encontrado para "{searchTerm}"</p>
             <p className="text-sm text-muted-foreground">Tente usar outros termos como o nome do aparelho ou capacidade.</p>
           </div>
-        ) : !isLoading && matches.length === 0 ? (
+        ) : !isLoading && uniqueMatches.length === 0 ? (
           <div className="py-12 text-center bg-card/40 border border-border rounded-xl">
             <p className="text-foreground font-medium mb-2">Nenhum match encontrado ainda</p>
             <p className="text-sm text-muted-foreground">Adicione mais leads de trade-in e compradores para cruzar oportunidades.</p>
           </div>
         ) : null}
 
-        {!isLoading && filteredMatches.length > 0 && (
+        {activeTab === 'active' && !isLoading && filteredMatches.length > 0 && (
           <div className="mb-10">
             <div className="space-y-4">
               {currentMatches.map((match, index) => {
-                const isFirstPartial = match.score < 100 && (index === 0 || currentMatches[index - 1].score === 100);
-                const isFirstPerfect = match.score === 100 && index === 0 && currentPage === 1;
+                const isFirstPartial = match.bestScore < 100 && (index === 0 || currentMatches[index - 1].bestScore === 100);
+                const isFirstPerfect = match.bestScore === 100 && index === 0 && currentPage === 1;
 
                 return (
                   <div key={match.id}>
@@ -191,7 +232,7 @@ const Matching = () => {
                         Oportunidades de Upsell — O lead comprador pode precisar inteirar
                       </h3>
                     )}
-                    <MatchCard match={match} />
+                    <MatchCard match={match} onRemoveTradeIn={(id) => setConcludedIds(prev => Array.from(new Set([...prev, id])))} />
                   </div>
                 );
               })}
@@ -275,6 +316,43 @@ const Matching = () => {
                   </div>
 
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'concluded' && !isLoading && (
+          <div className="mb-10">
+            {concludedMatches.length === 0 ? (
+              <div className="py-12 text-center bg-card/40 border border-border rounded-xl">
+                <p className="text-foreground font-medium mb-2">Nenhum lead concluído ainda. Marque um lead com ✓ para ele aparecer aqui.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {concludedMatches.map((match) => {
+                  const t = match.tradeInLead;
+                  const initials = (t.nome || '').split(' ').map(s => s[0]).slice(0,2).join('').toUpperCase();
+                  return (
+                    <div key={match.id} className="rounded-xl border bg-card/40 p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-full bg-muted-foreground/10 flex items-center justify-center text-sm font-semibold text-foreground">{initials}</div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium text-foreground">{t.nome}</div>
+                            <Badge className="text-xs">trade-in</Badge>
+                          </div>
+                          <div className="text-sm text-muted-foreground">{t.modelo_entrada} {t.armazenamento_entrada || ''}</div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Button size="sm" variant="outline" onClick={() => setConcludedIds(prev => prev.filter(id => id !== String(match.tradeInLead.id)))}>
+                          ↩ Retornar ao matching
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

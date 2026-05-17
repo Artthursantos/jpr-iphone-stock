@@ -6,12 +6,54 @@ import { Button } from "@/components/ui/button";
 import { calculateInstallment, formatCurrency, PaymentMethod, CardBrand } from "@/lib/installmentRates";
 import sealStoreLogo from "@/assets/seal-store-logo.png";
 import Navigation from "@/components/Navigation";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Copy, Check, LogOut } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
+
+type PaymentType = "pix" | "credit_card" | "payment_link";
+
+const GATEWAY_OPTIONS: Record<Exclude<PaymentType, "pix">, { value: PaymentMethod; label: string }[]> = {
+  credit_card: [
+    { value: "pagseguro", label: "PagSeguro" },
+    { value: "cielo_machine", label: "Cielo" },
+    { value: "liqd_finance", label: "Liqd Finance" },
+  ],
+  payment_link: [
+    { value: "link", label: "Mercado Pago" },
+    { value: "cielo_link", label: "Cielo (Link)" },
+  ],
+};
+
+const BRAND_OPTIONS: Record<PaymentMethod, CardBrand[]> = {
+  pix: [],
+  pagseguro: ["VISA", "MASTER", "ELO", "HIPER", "DEMAIS"],
+  cielo_machine: ["VISA", "MASTER"],
+  liqd_finance: ["VISA", "MASTER", "ELO", "AMEX", "HIPERCARD"],
+  link: ["VISA", "MASTER", "ELO", "HIPER", "DEMAIS"],
+  cielo_link: ["VISA", "MASTER", "ELO", "AMEX", "DINERS"],
+};
+
+const MAX_INSTALLMENTS_BY_GATEWAY: Record<PaymentMethod, number> = {
+  pix: 1,
+  pagseguro: 18,
+  cielo_machine: 18,
+  liqd_finance: 18,
+  link: 12,
+  cielo_link: 12,
+};
+
+const BRAND_LABELS: Record<CardBrand, string> = {
+  VISA: "Visa",
+  MASTER: "Master",
+  ELO: "Elo",
+  HIPER: "Hiper",
+  DEMAIS: "Demais",
+  AMEX: "Amex",
+  HIPERCARD: "Hipercard",
+  DINERS: "Diners",
+};
 
 const Calculator = () => {
   const { logout } = useAuth();
@@ -34,6 +76,7 @@ const Calculator = () => {
   const [downPayment, setDownPayment] = useState<string>("");
   
   // Pagamento
+  const [paymentType, setPaymentType] = useState<PaymentType>('payment_link');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('link');
   const [cardBrand, setCardBrand] = useState<CardBrand>('VISA');
   const [selectedInstallments, setSelectedInstallments] = useState<string>("12");
@@ -59,21 +102,67 @@ const Calculator = () => {
   const baseValueSealClub = Math.max(0, parsedSealClubPrice - parsedTradeIn - parsedDownPayment);
   const baseValueNormal = Math.max(0, parsedNormalPrice - parsedTradeIn - parsedDownPayment);
   const savings = Math.max(0, parsedNormalPrice - parsedSealClubPrice);
+  const isPix = paymentType === 'pix';
+  const gatewayOptions = paymentType === 'pix' ? [] : GATEWAY_OPTIONS[paymentType];
+  const brandOptions = BRAND_OPTIONS[paymentMethod] || [];
+  const maxInstallments = MAX_INSTALLMENTS_BY_GATEWAY[paymentMethod] || 12;
+
+  const handlePaymentTypeChange = (value: PaymentType) => {
+    setPaymentType(value);
+
+    if (value === 'pix') {
+      setPaymentMethod('pix');
+      setCardBrand('VISA');
+      setSelectedInstallments('1');
+      return;
+    }
+
+    const nextGateway = GATEWAY_OPTIONS[value][0].value;
+    const nextBrand = BRAND_OPTIONS[nextGateway][0];
+    setPaymentMethod(nextGateway);
+    setCardBrand(nextBrand);
+    setSelectedInstallments('1');
+  };
+
+  const handleGatewayChange = (value: PaymentMethod) => {
+    setPaymentMethod(value);
+    const nextBrand = BRAND_OPTIONS[value][0];
+    if (nextBrand) {
+      setCardBrand(nextBrand);
+    }
+    setSelectedInstallments('1');
+  };
+
+  const handleBrandChange = (value: CardBrand) => {
+    setCardBrand(value);
+    setSelectedInstallments('1');
+  };
+
+  const handleInstallmentChange = (value: string) => {
+    setSelectedInstallments(value);
+  };
+
+  const selectedInstallmentNumber = Math.min(Math.max(parseInt(selectedInstallments) || 1, 1), maxInstallments);
+  const selectedInstallmentsValue = String(selectedInstallmentNumber);
 
   const installmentTable = useMemo(() => {
-    const installments = Array.from({ length: 18 }, (_, i) => i + 1);
+    if (isPix) {
+      return [];
+    }
+
+    const installments = Array.from({ length: maxInstallments }, (_, i) => i + 1);
     return installments.map((installmentCount) => {
       const sealClubCalc = calculateInstallment(
         baseValueSealClub, 
         installmentCount,
         paymentMethod,
-        paymentMethod === 'pagseguro' ? cardBrand : undefined
+        cardBrand
       );
       const normalCalc = calculateInstallment(
         baseValueNormal,
         installmentCount,
         paymentMethod,
-        paymentMethod === 'pagseguro' ? cardBrand : undefined
+        cardBrand
       );
       return {
         installments: installmentCount,
@@ -84,7 +173,7 @@ const Calculator = () => {
         installmentValueNormal: normalCalc.installmentValue,
       };
     });
-  }, [baseValueSealClub, baseValueNormal, paymentMethod, cardBrand]);
+  }, [baseValueSealClub, baseValueNormal, paymentMethod, cardBrand, isPix, maxInstallments]);
 
   const hasTradeIn = parsedTradeIn > 0;
   const hasDownPayment = parsedDownPayment > 0;
@@ -109,13 +198,13 @@ const Calculator = () => {
 
     if (!hasSealClub) {
       // ── MODO SIMPLES (sem SealClub) ── igual ao Sistema de Inventário
-      if (paymentMethod === 'pix') {
+      if (isPix) {
         const prefix = buildEntryPrefix(true);
         if (prefix) text += `${prefix}:\n\n`;
         else text += `\n`;
         text += `💵 À vista no PIX: ${formatCurrency(baseValueNormal)}`;
       } else {
-        const installments = parseInt(selectedInstallments);
+        const installments = selectedInstallmentNumber;
         const selectedRow = installmentTable.find(row => row.installments === installments);
         const prefix = buildEntryPrefix(false);
         if (prefix) text += `${prefix}:\n\n`;
@@ -128,14 +217,14 @@ const Calculator = () => {
     } else {
       // ── MODO COMPLETO (com comparação SealClub) ──
       text += `\n`;
-      if (paymentMethod === 'pix') {
+      if (isPix) {
         const prefix = buildEntryPrefix(true);
         if (prefix) text += `${prefix}:\n\n`;
         text += `🟨 Valor normal:\n💵 À vista no PIX: ${formatCurrency(baseValueNormal)}\n\n`;
         text += `🟦 Para membros SealClub:\n💵 À vista no PIX: ${formatCurrency(baseValueSealClub)}\n\n`;
         text += `💰 Economia imediata: ${formatCurrency(savings)} na compra só por ser membro\n${warrantyText}`;
       } else {
-        const installments = parseInt(selectedInstallments);
+        const installments = selectedInstallmentNumber;
         const selectedRow = installmentTable.find(row => row.installments === installments);
         const prefix = buildEntryPrefix(false);
         if (prefix) text += `${prefix}:\n\n`;
@@ -190,35 +279,70 @@ const Calculator = () => {
         <div className="mb-6">
           <Card className="bg-card border-border">
             <CardContent className="pt-6">
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-foreground mb-3 block text-sm font-medium">Tipo de Taxa</Label>
-                  <Tabs value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}>
-                    <TabsList className="grid w-full max-w-lg grid-cols-3">
-                      <TabsTrigger value="link">Link de Pagamento</TabsTrigger>
-                      <TabsTrigger value="pagseguro">PagSeguro</TabsTrigger>
-                      <TabsTrigger value="pix">PIX</TabsTrigger>
-                    </TabsList>
-                  </Tabs>
-                </div>
-
-                {paymentMethod === 'pagseguro' && (
-                  <div>
-                    <Label htmlFor="cardBrand" className="text-foreground">Bandeira do Cartão</Label>
-                    <Select value={cardBrand} onValueChange={(value) => setCardBrand(value as CardBrand)}>
-                      <SelectTrigger id="cardBrand" className="bg-card border-border mt-2">
-                        <SelectValue placeholder="Selecione a bandeira" />
+              <div className="mx-auto w-full max-w-4xl">
+                <div className="grid gap-4 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
+                  <div className="space-y-2">
+                    <Label className="text-foreground text-sm font-medium">Tipo de Taxa</Label>
+                    <Select value={paymentType} onValueChange={(value) => handlePaymentTypeChange(value as PaymentType)}>
+                      <SelectTrigger className="bg-card border-border">
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-card border-border">
-                        <SelectItem value="VISA">VISA</SelectItem>
-                        <SelectItem value="MASTER">MASTER</SelectItem>
-                        <SelectItem value="ELO">ELO</SelectItem>
-                        <SelectItem value="HIPER">HIPER</SelectItem>
-                        <SelectItem value="DEMAIS">DEMAIS</SelectItem>
+                        <SelectItem value="pix">PIX</SelectItem>
+                        <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
+                        <SelectItem value="payment_link">Link de Pagamento</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                )}
+
+                  {!isPix && (
+                    <div className="space-y-2">
+                      <Label htmlFor="gateway" className="text-foreground text-sm font-medium">Gateway de Pagamento</Label>
+                      <Select value={paymentMethod} onValueChange={(value) => handleGatewayChange(value as PaymentMethod)}>
+                        <SelectTrigger id="gateway" className="bg-card border-border">
+                          <SelectValue placeholder="Selecione o gateway" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          {gatewayOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {!isPix && brandOptions.length > 0 && (
+                    <div className="space-y-2">
+                      <Label htmlFor="cardBrand" className="text-foreground text-sm font-medium">Bandeira do Cartão</Label>
+                      <Select value={cardBrand} onValueChange={(value) => handleBrandChange(value as CardBrand)}>
+                        <SelectTrigger id="cardBrand" className="bg-card border-border">
+                          <SelectValue placeholder="Selecione a bandeira" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          {brandOptions.map((brand) => (
+                            <SelectItem key={brand} value={brand}>{BRAND_LABELS[brand]}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
+                  {!isPix && (
+                    <div className="space-y-2">
+                      <Label htmlFor="installmentsTop" className="text-foreground text-sm font-medium">Número de Parcelas</Label>
+                      <Select value={selectedInstallmentsValue} onValueChange={handleInstallmentChange}>
+                        <SelectTrigger id="installmentsTop" className="bg-card border-border">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-card border-border">
+                          {Array.from({ length: maxInstallments }, (_, i) => i + 1).map((num) => (
+                            <SelectItem key={num} value={num.toString()}>{num}x</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -334,15 +458,15 @@ const Calculator = () => {
                 </div>
               </div>
 
-              {paymentMethod !== 'pix' && (
+              {!isPix && (
                 <div className="pt-4 border-t border-border">
                   <Label htmlFor="installments" className="text-foreground">Parcelas para copiar</Label>
-                  <Select value={selectedInstallments} onValueChange={setSelectedInstallments}>
+                  <Select value={selectedInstallmentsValue} onValueChange={handleInstallmentChange}>
                     <SelectTrigger id="installments" className="bg-card border-border mt-2">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-card border-border">
-                      {Array.from({ length: 18 }, (_, i) => i + 1).map((num) => (
+                      {Array.from({ length: maxInstallments }, (_, i) => i + 1).map((num) => (
                         <SelectItem key={num} value={num.toString()}>{num}x</SelectItem>
                       ))}
                     </SelectContent>
@@ -370,7 +494,7 @@ const Calculator = () => {
             </CardContent>
           </Card>
 
-          {paymentMethod !== 'pix' ? (
+          {!isPix ? (
             <Card className="bg-card border-border">
               <CardHeader>
                 <CardTitle className="text-2xl text-foreground">Tabela de Parcelamento</CardTitle>
@@ -391,7 +515,7 @@ const Calculator = () => {
                         <tr 
                           key={row.installments} 
                           className={`border-b border-border/50 hover:bg-accent/50 transition-colors ${
-                            row.installments.toString() === selectedInstallments ? 'bg-primary/10' : ''
+                            row.installments.toString() === selectedInstallmentsValue ? 'bg-primary/10' : ''
                           }`}
                         >
                           <td className="py-3 px-2 text-foreground font-medium">{row.installments}x</td>

@@ -115,3 +115,25 @@ All colors MUST be HSL.
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .matching-scrollbar {
+    scrollbar-color: hsl(var(--primary)) hsl(var(--card));
+    scrollbar-width: thin;
+  }
+
+  .matching-scrollbar::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .matching-scrollbar::-webkit-scrollbar-track {
+    background: hsl(var(--card));
+    border-radius: 999px;
+  }
+
+  .matching-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary));
+    border-radius: 999px;
+    border: 2px solid hsl(var(--card));
+  }
+}

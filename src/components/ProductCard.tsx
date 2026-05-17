@@ -39,17 +39,16 @@ const ProductCard = ({ product }: ProductCardProps) => {
     });
 
     if (product.preco) {
-      // Normaliza string de preço que possa vir com separadores locais
-      const normalized = product.preco
-        .replace(/[^\d,.-]/g, "") // remove símbolos
-        .replace(/\./g, "") // remove separador de milhar com ponto
-        .replace(",", "."); // converte decimal para ponto
-
-      const value = Number(normalized);
-      if (!Number.isNaN(value)) {
-        return formatter.format(value);
+      const cleaned = product.preco.replace(/[^\d,.-]/g, "").trim();
+      let value: number;
+      if (cleaned.includes(",")) {
+        // Formato brasileiro: "2.597,00" → remove pontos de milhar, troca vírgula por ponto
+        value = Number(cleaned.replace(/\./g, "").replace(",", "."));
+      } else {
+        // Formato decimal: "2597.00" → parse direto
+        value = Number(cleaned);
       }
-      // fallback para valor original caso parsing falhe
+      if (!Number.isNaN(value)) return formatter.format(value);
       return product.preco;
     }
 

@@ -7,9 +7,9 @@ interface MatchStatsProps {
 
 export const MatchStats = ({ matches }: MatchStatsProps) => {
   const totalMatches = matches.length;
-  const perfectMatches = matches.filter(m => m.score === 100).length;
-  
-  const potentialTotal = matches.reduce((acc, curr) => acc + curr.potentialValue, 0);
+  const perfectMatches = matches.filter(m => m.bestScore === 100).length;
+
+  const potentialTotal = matches.reduce((acc, curr) => acc + curr.totalPotential, 0);
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
