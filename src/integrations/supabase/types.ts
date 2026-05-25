@@ -98,12 +98,34 @@ export type Database = {
         }
         Relationships: []
       }
+      presets: {
+        Row: {
+          id: string
+          name: string
+          config: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          config: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          config?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
       produtos: {
         Row: {
           armazenamento: string | null
           atualized_at: string | null
           cores: string | null
           created_at: string
+          custo: string | null
           economia: string | null
           fora_do_club: string | null
           id: number
@@ -120,6 +142,7 @@ export type Database = {
           atualized_at?: string | null
           cores?: string | null
           created_at?: string
+          custo?: string | null
           economia?: string | null
           fora_do_club?: string | null
           id?: number
@@ -136,6 +159,7 @@ export type Database = {
           atualized_at?: string | null
           cores?: string | null
           created_at?: string
+          custo?: string | null
           economia?: string | null
           fora_do_club?: string | null
           id?: number

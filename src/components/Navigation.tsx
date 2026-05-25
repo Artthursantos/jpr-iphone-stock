@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Package, Calculator, Shuffle } from "lucide-react";
+import { Package, Calculator, Shuffle, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Navigation = () => {
@@ -15,6 +15,11 @@ const Navigation = () => {
       name: "Calculadora de Taxas",
       path: "/calculator",
       icon: Calculator,
+    },
+    {
+      name: "Precificação",
+      path: "/pricing",
+      icon: Tag,
     },
     {
       name: "Matching",

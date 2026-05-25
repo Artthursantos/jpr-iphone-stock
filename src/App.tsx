@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Calculator from "./pages/Calculator";
+import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Matching from "./pages/Matching";
@@ -35,6 +36,11 @@ const App = () => (
             <Route path="/matching" element={
               <ProtectedRoute>
                 <Matching />
+              </ProtectedRoute>
+            } />
+            <Route path="/pricing" element={
+              <ProtectedRoute>
+                <Pricing />
               </ProtectedRoute>
             } />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

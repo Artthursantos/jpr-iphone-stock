@@ -24,7 +24,7 @@ function mapRowToRecord(row: any[], _rowIndex: number): Record<string, any> | nu
   // [5] F: Cores (ex: "Midnight", "Branco") → cores
   // [6] G: Categoria (ex: "Seminovo", "Novo") → novo_seminovo
   // [7] H: Armazenamento (ex: "128GB", "256GB") → armazenamento
-  // [8] I: Custo - ignorado
+  // [8] I: Custo → custo
   // [9] J: Valor de Venda - Sugerido - ignorado
   // [10] K: À Vista (ex: "R$ 2.597,00") → preco
 
@@ -34,6 +34,7 @@ function mapRowToRecord(row: any[], _rowIndex: number): Record<string, any> | nu
   const cores         = normalizeText(row[5]);
   const novoSeminovo  = normalizeText(row[6]);
   const armazenamento = normalizeText(row[7]);
+  const custo         = row.length > 8 ? normalizeText(row[8]) : '';
   const aVista        = row.length > 10 ? normalizeText(row[10]) : '';
 
   // Apenas linhas com categoria válida (Novo ou Seminovo)
@@ -48,6 +49,7 @@ function mapRowToRecord(row: any[], _rowIndex: number): Record<string, any> | nu
     cores: cores || null,
     revendedor: revendedor || null,
     status_estoque: statusEstoque || null,
+    custo: custo || null,
     preco: aVista || null,
     atualized_at: new Date().toISOString(),
   };
