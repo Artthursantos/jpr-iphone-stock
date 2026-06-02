@@ -113,14 +113,15 @@ serve(async (req) => {
     }
 
     // Find matching row
-    // Column indices: [4] = E (produto), [7] = H (armazenamento), [5] = F (cores)
+    // Coluna D "Status" foi removida — novos índices:
+    // [3] D = produto, [4] E = cores, [6] G = armazenamento, [9] J = À Vista
     let targetRowIndex = -1;
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      const rowProduto = normalizeText(row[4]);
-      const rowArmazenamento = normalizeText(row[7]);
-      const rowCores = normalizeText(row[5]);
+      const rowProduto = normalizeText(row[3]);
+      const rowArmazenamento = normalizeText(row[6]);
+      const rowCores = normalizeText(row[4]);
 
       if (
         rowProduto.toLowerCase() === produto.toLowerCase() &&
@@ -136,8 +137,8 @@ serve(async (req) => {
       throw new Error(`Produto "${produto}" não encontrado na planilha.`);
     }
 
-    // Update the price cell (column K = index 10)
-    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(sheetTitle)}!K${targetRowIndex + 1}?valueInputOption=RAW`;
+    // Update the price cell (column J = index 9 = À Vista)
+    const updateUrl = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(sheetTitle)}!J${targetRowIndex + 1}?valueInputOption=RAW`;
     const updateRes = await fetch(updateUrl, {
       method: 'PUT',
       headers: {

@@ -15,27 +15,25 @@ function normalizeText(value: string | undefined) {
 function mapRowToRecord(row: any[], _rowIndex: number): Record<string, any> | null {
   if (!row || row.length < 7) return null;
 
-  // Estrutura da planilha "Tabela de Preço - 2026":
+  // Estrutura da planilha "Tabela de Preço - 2026" (coluna D "Status" foi removida):
   // [0] A: (vazio)
   // [1] B: Fornecedor (ex: "Seal", "Rex") → revendedor
   // [2] C: Prazo (ex: "pronta entrega") - ignorado
-  // [3] D: Status (ex: "disponível") → status_estoque
-  // [4] E: Nome do Produto (ex: "iPhone 13 Midnight - 84%") → produto
-  // [5] F: Cores (ex: "Midnight", "Branco") → cores
-  // [6] G: Categoria (ex: "Seminovo", "Novo") → novo_seminovo
-  // [7] H: Armazenamento (ex: "128GB", "256GB") → armazenamento
-  // [8] I: Custo → custo
-  // [9] J: Valor de Venda - Sugerido - ignorado
-  // [10] K: À Vista (ex: "R$ 2.597,00") → preco
+  // [3] D: Nome do Produto (ex: "iPhone 13 Midnight - 84%") → produto
+  // [4] E: Cores (ex: "Midnight", "Branco") → cores
+  // [5] F: Categoria (ex: "Seminovo", "Novo") → novo_seminovo
+  // [6] G: Armazenamento (ex: "128GB", "256GB") → armazenamento
+  // [7] H: Custo → custo
+  // [8] I: Valor de Venda - Sugerido - ignorado
+  // [9] J: À Vista (ex: "R$ 2.597,00") → preco
 
   const revendedor    = normalizeText(row[1]);
-  const statusEstoque = normalizeText(row[3]);
-  const produto       = normalizeText(row[4]);
-  const cores         = normalizeText(row[5]);
-  const novoSeminovo  = normalizeText(row[6]);
-  const armazenamento = normalizeText(row[7]);
-  const custo         = row.length > 8 ? normalizeText(row[8]) : '';
-  const aVista        = row.length > 10 ? normalizeText(row[10]) : '';
+  const produto       = normalizeText(row[3]);
+  const cores         = normalizeText(row[4]);
+  const novoSeminovo  = normalizeText(row[5]);
+  const armazenamento = normalizeText(row[6]);
+  const custo         = row.length > 7 ? normalizeText(row[7]) : '';
+  const aVista        = row.length > 9 ? normalizeText(row[9]) : '';
 
   // Apenas linhas com categoria válida (Novo ou Seminovo)
   const categoriaLower = novoSeminovo.toLowerCase();
@@ -48,7 +46,6 @@ function mapRowToRecord(row: any[], _rowIndex: number): Record<string, any> | nu
     novo_seminovo: novoSeminovo,
     cores: cores || null,
     revendedor: revendedor || null,
-    status_estoque: statusEstoque || null,
     custo: custo || null,
     preco: aVista || null,
     atualized_at: new Date().toISOString(),
