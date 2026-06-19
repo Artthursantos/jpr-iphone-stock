@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Outlet } from "react-router-dom";
 import Index from "./pages/Index";
 import Calculator from "./pages/Calculator";
 import Pricing from "./pages/Pricing";
@@ -14,40 +14,62 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
+// Layout raiz: mantém o AuthProvider acima de todas as rotas.
+const RootLayout = () => (
+  <AuthProvider>
+    <Outlet />
+  </AuthProvider>
+);
+
+const router = createBrowserRouter([
+  {
+    element: <RootLayout />,
+    children: [
+      { path: "/login", element: <Login /> },
+      {
+        path: "/",
+        element: (
+          <ProtectedRoute>
+            <Index />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/calculator",
+        element: (
+          <ProtectedRoute>
+            <Calculator />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/matching",
+        element: (
+          <ProtectedRoute>
+            <Matching />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/pricing",
+        element: (
+          <ProtectedRoute>
+            <Pricing />
+          </ProtectedRoute>
+        ),
+      },
+      // ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE
+      { path: "*", element: <NotFound /> },
+    ],
+  },
+]);
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={
-              <ProtectedRoute>
-                <Index />
-              </ProtectedRoute>
-            } />
-            <Route path="/calculator" element={
-              <ProtectedRoute>
-                <Calculator />
-              </ProtectedRoute>
-            } />
-            <Route path="/matching" element={
-              <ProtectedRoute>
-                <Matching />
-              </ProtectedRoute>
-            } />
-            <Route path="/pricing" element={
-              <ProtectedRoute>
-                <Pricing />
-              </ProtectedRoute>
-            } />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </TooltipProvider>
   </QueryClientProvider>
 );

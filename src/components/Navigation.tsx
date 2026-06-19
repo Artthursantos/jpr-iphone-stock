@@ -5,27 +5,33 @@ import { cn } from "@/lib/utils";
 const Navigation = () => {
   const location = useLocation();
 
+  // viewTransition só nas páginas leves — nas pesadas (Inventário/Matching) o
+  // render síncrono congela a tela e a transição vira demora perceptível.
   const tabs = [
     {
       name: "Sistema de Inventário",
       path: "/",
       icon: Package,
+      viewTransition: false,
     },
     {
       name: "Calculadora de Taxas",
       path: "/calculator",
       icon: Calculator,
+      viewTransition: true,
     },
     {
       name: "Precificação",
       path: "/pricing",
       icon: Tag,
+      viewTransition: true,
     },
     {
       name: "Matching",
       path: "/matching",
       icon: Shuffle,
       badge: "BETA",
+      viewTransition: false,
     },
   ];
 
@@ -41,6 +47,7 @@ const Navigation = () => {
               <Link
                 key={tab.path}
                 to={tab.path}
+                viewTransition={tab.viewTransition}
                 className={cn(
                   "flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors relative",
                   "hover:text-primary",

@@ -116,6 +116,46 @@ All colors MUST be HSL.
   }
 }
 
+/* Transição entre páginas (View Transitions API).
+   Só o <main> anima — cabeçalho e navbar ficam fixos (o "root" faz um
+   crossfade imperceptível por serem idênticos entre as páginas). */
+@media (prefers-reduced-motion: no-preference) {
+  main {
+    view-transition-name: page-content;
+  }
+
+  /* cabeçalho/navbar: crossfade neutro e curto, sem deslize */
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 220ms;
+    animation-timing-function: ease;
+  }
+
+  /* conteúdo antigo sai para a esquerda… */
+  ::view-transition-old(page-content) {
+    animation: vt-content-out 250ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  /* …e o novo entra vindo da direita */
+  ::view-transition-new(page-content) {
+    animation: vt-content-in 300ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+
+  @keyframes vt-content-out {
+    to {
+      opacity: 0;
+      transform: translateX(-40px);
+    }
+  }
+
+  @keyframes vt-content-in {
+    from {
+      opacity: 0;
+      transform: translateX(40px);
+    }
+  }
+}
+
 @layer utilities {
   .matching-scrollbar {
     scrollbar-color: hsl(var(--primary)) hsl(var(--card));
