@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Copy } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import { calculateInstallment, formatCurrency, PaymentMethod, CardBrand } from "@/lib/installmentRates";
+import { formatCurrency } from "@/lib/installmentRates";
+import { useRateConfig } from "@/hooks/useRateConfig";
+import { getRateFromConfig, calcInstallmentFromRate } from "@/lib/rateConfig";
 import { toast } from "@/hooks/use-toast";
 
 type Product = Database['public']['Tables']['produtos']['Row'];
@@ -17,53 +19,11 @@ interface ProductInstallmentDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-type PaymentType = "pix" | "credit_card" | "payment_link";
-
-const GATEWAY_OPTIONS: Record<Exclude<PaymentType, "pix">, { value: PaymentMethod; label: string }[]> = {
-  credit_card: [
-    { value: "pagseguro", label: "PagSeguro" },
-    { value: "cielo_machine", label: "Cielo" },
-    { value: "liqd_finance", label: "Liqd Finance" },
-  ],
-  payment_link: [
-    { value: "link", label: "Mercado Pago" },
-    { value: "cielo_link", label: "Cielo (Link)" },
-  ],
-};
-
-const BRAND_OPTIONS: Record<PaymentMethod, CardBrand[]> = {
-  pix: [],
-  pagseguro: ["VISA", "MASTER", "ELO", "HIPER", "DEMAIS"],
-  cielo_machine: ["VISA", "MASTER"],
-  liqd_finance: ["VISA", "MASTER", "ELO", "AMEX", "HIPERCARD"],
-  link: ["VISA", "MASTER", "ELO", "HIPER", "DEMAIS"],
-  cielo_link: ["VISA", "MASTER", "ELO", "AMEX", "DINERS"],
-};
-
-const MAX_INSTALLMENTS_BY_GATEWAY: Record<PaymentMethod, number> = {
-  pix: 1,
-  pagseguro: 18,
-  cielo_machine: 18,
-  liqd_finance: 18,
-  link: 12,
-  cielo_link: 12,
-};
-
-const BRAND_LABELS: Record<CardBrand, string> = {
-  VISA: "Visa",
-  MASTER: "Master",
-  ELO: "Elo",
-  HIPER: "Hiper",
-  DEMAIS: "Demais",
-  AMEX: "Amex",
-  HIPERCARD: "Hipercard",
-  DINERS: "Diners",
-};
-
 const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstallmentDialogProps) => {
-  const [paymentType, setPaymentType] = useState<PaymentType>("credit_card");
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pagseguro");
-  const [cardBrand, setCardBrand] = useState<CardBrand>("VISA");
+  const { config } = useRateConfig();
+  const [paymentType, setPaymentType] = useState<string>("credit_card");
+  const [paymentMethod, setPaymentMethod] = useState<string>("pagseguro");
+  const [cardBrand, setCardBrand] = useState<string>("VISA");
   const [installments, setInstallments] = useState<string>("1");
   const [entryOption, setEntryOption] = useState<string>("sem");
   const [entryType, setEntryType] = useState<string>("dinheiro");
@@ -106,35 +66,49 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
   const hasEntry = entryOption === "com";
 
   const activeBasePrice = hasEntry ? Math.max(0, basePrice - parsedEntryValue) : basePrice;
-  const isPix = paymentType === "pix";
-  const gatewayOptions = paymentType === "pix" ? [] : GATEWAY_OPTIONS[paymentType];
-  const selectedBrandOptions = BRAND_OPTIONS[paymentMethod] || [];
-  const maxInstallments = MAX_INSTALLMENTS_BY_GATEWAY[paymentMethod] || 12;
+
+  const currentType = config.types.find((t) => t.id === paymentType);
+  const isPix = !!currentType?.isPix;
+  const gatewayOptions = currentType?.gateways ?? [];
+  const currentGateway = gatewayOptions.find((g) => g.id === paymentMethod);
+  const selectedBrandOptions = currentGateway?.brands ?? [];
+  const maxInstallments = currentGateway?.maxInstallments ?? 12;
   const installmentOptions = Array.from({ length: maxInstallments }, (_, index) => String(index + 1));
 
-  const handlePaymentTypeChange = (value: PaymentType) => {
+  // Mesma proteção do Calculator: se a config mudar e a seleção sumir, reseta.
+  useEffect(() => {
+    const t = config.types.find((x) => x.id === paymentType) ?? config.types[0];
+    if (!t) return;
+    if (t.id !== paymentType) setPaymentType(t.id);
+    if (t.isPix) return;
+    const g = t.gateways.find((x) => x.id === paymentMethod) ?? t.gateways[0];
+    if (g && g.id !== paymentMethod) setPaymentMethod(g.id);
+    const b = g?.brands.find((x) => x.id === cardBrand) ?? g?.brands[0];
+    if (b && b.id !== cardBrand) setCardBrand(b.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config]);
+
+  const handlePaymentTypeChange = (value: string) => {
     setPaymentType(value);
     setInstallments("1");
 
-    if (value === "pix") {
-      setPaymentMethod("pix");
-      setCardBrand("VISA");
+    const type = config.types.find((t) => t.id === value);
+    if (!type || type.isPix) {
+      setPaymentMethod(type?.gateways[0]?.id ?? "");
+      setCardBrand("");
       return;
     }
 
-    const defaultGateway = GATEWAY_OPTIONS[value][0].value;
-    const defaultBrand = BRAND_OPTIONS[defaultGateway][0];
-    setPaymentMethod(defaultGateway);
-    setCardBrand(defaultBrand);
+    const nextGateway = type.gateways[0];
+    setPaymentMethod(nextGateway?.id ?? "");
+    setCardBrand(nextGateway?.brands[0]?.id ?? "");
   };
 
-  const handleGatewayChange = (value: PaymentMethod) => {
+  const handleGatewayChange = (value: string) => {
     setPaymentMethod(value);
     setInstallments("1");
-    const defaultBrand = BRAND_OPTIONS[value][0];
-    if (defaultBrand) {
-      setCardBrand(defaultBrand);
-    }
+    const gateway = currentType?.gateways.find((g) => g.id === value);
+    setCardBrand(gateway?.brands[0]?.id ?? "");
   };
 
   const installmentData = useMemo(() => {
@@ -142,13 +116,9 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
       return { finalValue: activeBasePrice, installmentValue: activeBasePrice, rate: 0 };
     }
 
-    return calculateInstallment(
-      activeBasePrice,
-      parseInt(installments),
-      paymentMethod,
-      cardBrand
-    );
-  }, [activeBasePrice, installments, paymentMethod, cardBrand, isPix]);
+    const rate = getRateFromConfig(config, paymentType, paymentMethod, cardBrand, parseInt(installments));
+    return calcInstallmentFromRate(activeBasePrice, parseInt(installments), rate);
+  }, [config, activeBasePrice, installments, paymentType, paymentMethod, cardBrand, isPix]);
 
   // Build display name: "Nome Armazenamento Condição"
   const condition = product.novo_seminovo?.trim() || '';
@@ -216,14 +186,14 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
           {/* Tipo de Pagamento */}
           <div className="space-y-3">
             <Label className="text-base font-semibold">Tipo de pagamento</Label>
-            <Select value={paymentType} onValueChange={(value) => handlePaymentTypeChange(value as PaymentType)}>
+            <Select value={paymentType} onValueChange={handlePaymentTypeChange}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="pix">PIX</SelectItem>
-                <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
-                <SelectItem value="payment_link">Link de Pagamento</SelectItem>
+                {config.types.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -232,14 +202,14 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
           {!isPix && (
             <div className="space-y-3">
               <Label className="text-base font-semibold">Gateway de pagamento</Label>
-              <Select value={paymentMethod} onValueChange={(value) => handleGatewayChange(value as PaymentMethod)}>
+              <Select value={paymentMethod} onValueChange={handleGatewayChange}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {gatewayOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -251,14 +221,14 @@ const ProductInstallmentDialog = ({ product, open, onOpenChange }: ProductInstal
           {!isPix && selectedBrandOptions.length > 0 && (
             <div className="space-y-3">
               <Label className="text-base font-semibold">Bandeira</Label>
-              <Select value={cardBrand} onValueChange={(value) => setCardBrand(value as CardBrand)}>
+              <Select value={cardBrand} onValueChange={setCardBrand}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   {selectedBrandOptions.map((brand) => (
-                    <SelectItem key={brand} value={brand}>
-                      {BRAND_LABELS[brand]}
+                    <SelectItem key={brand.id} value={brand.id}>
+                      {brand.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -119,6 +119,24 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_configs: {
+        Row: {
+          id: string
+          config: Json
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          config: Json
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          config?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       produtos: {
         Row: {
           armazenamento: string | null

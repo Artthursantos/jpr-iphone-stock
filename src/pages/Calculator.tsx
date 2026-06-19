@@ -1,9 +1,12 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { calculateInstallment, formatCurrency, PaymentMethod, CardBrand } from "@/lib/installmentRates";
+import { formatCurrency } from "@/lib/installmentRates";
+import { useRateConfig } from "@/hooks/useRateConfig";
+import { getRateFromConfig, calcInstallmentFromRate } from "@/lib/rateConfig";
+import RateManagerDialog from "@/components/RateManagerDialog";
 import sealStoreLogo from "@/assets/seal-store-logo.png";
 import Navigation from "@/components/Navigation";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,52 +15,10 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 
-type PaymentType = "pix" | "credit_card" | "payment_link";
-
-const GATEWAY_OPTIONS: Record<Exclude<PaymentType, "pix">, { value: PaymentMethod; label: string }[]> = {
-  credit_card: [
-    { value: "pagseguro", label: "PagSeguro" },
-    { value: "cielo_machine", label: "Cielo" },
-    { value: "liqd_finance", label: "Liqd Finance" },
-  ],
-  payment_link: [
-    { value: "link", label: "Mercado Pago" },
-    { value: "cielo_link", label: "Cielo (Link)" },
-  ],
-};
-
-const BRAND_OPTIONS: Record<PaymentMethod, CardBrand[]> = {
-  pix: [],
-  pagseguro: ["VISA", "MASTER", "ELO", "HIPER", "DEMAIS"],
-  cielo_machine: ["VISA", "MASTER"],
-  liqd_finance: ["VISA", "MASTER", "ELO", "AMEX", "HIPERCARD"],
-  link: ["VISA", "MASTER", "ELO", "HIPER", "DEMAIS"],
-  cielo_link: ["VISA", "MASTER", "ELO", "AMEX", "DINERS"],
-};
-
-const MAX_INSTALLMENTS_BY_GATEWAY: Record<PaymentMethod, number> = {
-  pix: 1,
-  pagseguro: 18,
-  cielo_machine: 18,
-  liqd_finance: 18,
-  link: 12,
-  cielo_link: 12,
-};
-
-const BRAND_LABELS: Record<CardBrand, string> = {
-  VISA: "Visa",
-  MASTER: "Master",
-  ELO: "Elo",
-  HIPER: "Hiper",
-  DEMAIS: "Demais",
-  AMEX: "Amex",
-  HIPERCARD: "Hipercard",
-  DINERS: "Diners",
-};
-
 const Calculator = () => {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const { config } = useRateConfig();
 
   const handleLogout = () => {
     logout();
@@ -76,9 +37,9 @@ const Calculator = () => {
   const [downPayment, setDownPayment] = useState<string>("");
   
   // Pagamento
-  const [paymentType, setPaymentType] = useState<PaymentType>('payment_link');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('link');
-  const [cardBrand, setCardBrand] = useState<CardBrand>('VISA');
+  const [paymentType, setPaymentType] = useState<string>('payment_link');
+  const [paymentMethod, setPaymentMethod] = useState<string>('link');
+  const [cardBrand, setCardBrand] = useState<string>('VISA');
   const [selectedInstallments, setSelectedInstallments] = useState<string>("12");
   
   // UI
@@ -102,38 +63,52 @@ const Calculator = () => {
   const baseValueSealClub = Math.max(0, parsedSealClubPrice - parsedTradeIn - parsedDownPayment);
   const baseValueNormal = Math.max(0, parsedNormalPrice - parsedTradeIn - parsedDownPayment);
   const savings = Math.max(0, parsedNormalPrice - parsedSealClubPrice);
-  const isPix = paymentType === 'pix';
-  const gatewayOptions = paymentType === 'pix' ? [] : GATEWAY_OPTIONS[paymentType];
-  const brandOptions = BRAND_OPTIONS[paymentMethod] || [];
-  const maxInstallments = MAX_INSTALLMENTS_BY_GATEWAY[paymentMethod] || 12;
+  const currentType = config.types.find((t) => t.id === paymentType);
+  const isPix = !!currentType?.isPix;
+  const gatewayOptions = currentType?.gateways ?? [];
+  const currentGateway = gatewayOptions.find((g) => g.id === paymentMethod);
+  const brandOptions = currentGateway?.brands ?? [];
+  const maxInstallments = currentGateway?.maxInstallments ?? 12;
 
-  const handlePaymentTypeChange = (value: PaymentType) => {
+  // Se a config mudar (ex.: edição no gerenciador) e a seleção atual deixar de
+  // existir, cai para o primeiro item disponível — evita estado quebrado.
+  useEffect(() => {
+    const t = config.types.find((x) => x.id === paymentType) ?? config.types[0];
+    if (!t) return;
+    if (t.id !== paymentType) setPaymentType(t.id);
+    if (t.isPix) return;
+    const g = t.gateways.find((x) => x.id === paymentMethod) ?? t.gateways[0];
+    if (g && g.id !== paymentMethod) setPaymentMethod(g.id);
+    const b = g?.brands.find((x) => x.id === cardBrand) ?? g?.brands[0];
+    if (b && b.id !== cardBrand) setCardBrand(b.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config]);
+
+  const handlePaymentTypeChange = (value: string) => {
     setPaymentType(value);
 
-    if (value === 'pix') {
-      setPaymentMethod('pix');
-      setCardBrand('VISA');
+    const type = config.types.find((t) => t.id === value);
+    if (!type || type.isPix) {
+      setPaymentMethod(type?.gateways[0]?.id ?? '');
+      setCardBrand('');
       setSelectedInstallments('1');
       return;
     }
 
-    const nextGateway = GATEWAY_OPTIONS[value][0].value;
-    const nextBrand = BRAND_OPTIONS[nextGateway][0];
-    setPaymentMethod(nextGateway);
-    setCardBrand(nextBrand);
+    const nextGateway = type.gateways[0];
+    setPaymentMethod(nextGateway?.id ?? '');
+    setCardBrand(nextGateway?.brands[0]?.id ?? '');
     setSelectedInstallments('1');
   };
 
-  const handleGatewayChange = (value: PaymentMethod) => {
+  const handleGatewayChange = (value: string) => {
     setPaymentMethod(value);
-    const nextBrand = BRAND_OPTIONS[value][0];
-    if (nextBrand) {
-      setCardBrand(nextBrand);
-    }
+    const gateway = currentType?.gateways.find((g) => g.id === value);
+    setCardBrand(gateway?.brands[0]?.id ?? '');
     setSelectedInstallments('1');
   };
 
-  const handleBrandChange = (value: CardBrand) => {
+  const handleBrandChange = (value: string) => {
     setCardBrand(value);
     setSelectedInstallments('1');
   };
@@ -152,18 +127,9 @@ const Calculator = () => {
 
     const installments = Array.from({ length: maxInstallments }, (_, i) => i + 1);
     return installments.map((installmentCount) => {
-      const sealClubCalc = calculateInstallment(
-        baseValueSealClub, 
-        installmentCount,
-        paymentMethod,
-        cardBrand
-      );
-      const normalCalc = calculateInstallment(
-        baseValueNormal,
-        installmentCount,
-        paymentMethod,
-        cardBrand
-      );
+      const rate = getRateFromConfig(config, paymentType, paymentMethod, cardBrand, installmentCount);
+      const sealClubCalc = calcInstallmentFromRate(baseValueSealClub, installmentCount, rate);
+      const normalCalc = calcInstallmentFromRate(baseValueNormal, installmentCount, rate);
       return {
         installments: installmentCount,
         rate: sealClubCalc.rate,
@@ -173,7 +139,7 @@ const Calculator = () => {
         installmentValueNormal: normalCalc.installmentValue,
       };
     });
-  }, [baseValueSealClub, baseValueNormal, paymentMethod, cardBrand, isPix, maxInstallments]);
+  }, [baseValueSealClub, baseValueNormal, config, paymentType, paymentMethod, cardBrand, isPix, maxInstallments]);
 
   const hasTradeIn = parsedTradeIn > 0;
   const hasDownPayment = parsedDownPayment > 0;
@@ -280,17 +246,20 @@ const Calculator = () => {
           <Card className="bg-card border-border">
             <CardContent className="pt-6">
               <div className="mx-auto w-full max-w-4xl">
+                <div className="flex justify-end mb-4">
+                  <RateManagerDialog />
+                </div>
                 <div className="grid gap-4 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
                   <div className="space-y-2">
                     <Label className="text-foreground text-sm font-medium">Tipo de Taxa</Label>
-                    <Select value={paymentType} onValueChange={(value) => handlePaymentTypeChange(value as PaymentType)}>
+                    <Select value={paymentType} onValueChange={handlePaymentTypeChange}>
                       <SelectTrigger className="bg-card border-border">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent className="bg-card border-border">
-                        <SelectItem value="pix">PIX</SelectItem>
-                        <SelectItem value="credit_card">Cartão de Crédito</SelectItem>
-                        <SelectItem value="payment_link">Link de Pagamento</SelectItem>
+                        {config.types.map((type) => (
+                          <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -298,13 +267,13 @@ const Calculator = () => {
                   {!isPix && (
                     <div className="space-y-2">
                       <Label htmlFor="gateway" className="text-foreground text-sm font-medium">Gateway de Pagamento</Label>
-                      <Select value={paymentMethod} onValueChange={(value) => handleGatewayChange(value as PaymentMethod)}>
+                      <Select value={paymentMethod} onValueChange={handleGatewayChange}>
                         <SelectTrigger id="gateway" className="bg-card border-border">
                           <SelectValue placeholder="Selecione o gateway" />
                         </SelectTrigger>
                         <SelectContent className="bg-card border-border">
                           {gatewayOptions.map((option) => (
-                            <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                            <SelectItem key={option.id} value={option.id}>{option.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -314,13 +283,13 @@ const Calculator = () => {
                   {!isPix && brandOptions.length > 0 && (
                     <div className="space-y-2">
                       <Label htmlFor="cardBrand" className="text-foreground text-sm font-medium">Bandeira do Cartão</Label>
-                      <Select value={cardBrand} onValueChange={(value) => handleBrandChange(value as CardBrand)}>
+                      <Select value={cardBrand} onValueChange={handleBrandChange}>
                         <SelectTrigger id="cardBrand" className="bg-card border-border">
                           <SelectValue placeholder="Selecione a bandeira" />
                         </SelectTrigger>
                         <SelectContent className="bg-card border-border">
                           {brandOptions.map((brand) => (
-                            <SelectItem key={brand} value={brand}>{BRAND_LABELS[brand]}</SelectItem>
+                            <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
