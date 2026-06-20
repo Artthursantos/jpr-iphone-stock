@@ -10,7 +10,7 @@ import RateManagerDialog from "@/components/RateManagerDialog";
 import sealStoreLogo from "@/assets/seal-store-logo.png";
 import Navigation from "@/components/Navigation";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Copy, Check, LogOut } from "lucide-react";
+import { Copy, Check, LogOut, Calculator as CalculatorIcon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
@@ -244,11 +244,17 @@ const Calculator = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="mb-6">
           <Card className="bg-card border-border">
-            <CardContent className="pt-6">
-              <div className="mx-auto w-full max-w-4xl">
-                <div className="flex justify-end mb-4">
-                  <RateManagerDialog />
+            <CardHeader className="border-b border-border pb-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  <CalculatorIcon className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg text-foreground">Configuração da taxa</CardTitle>
                 </div>
+                <RateManagerDialog />
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <div className="w-full">
                 <div className="grid gap-4 md:grid-cols-2 md:gap-x-6 md:gap-y-5">
                   <div className="space-y-2">
                     <Label className="text-foreground text-sm font-medium">Tipo de Taxa</Label>
