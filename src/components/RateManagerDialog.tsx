@@ -21,7 +21,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Settings, Plus, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -294,7 +293,7 @@ const RateManagerDialog = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 -mx-1 px-1">
+          <div className="overflow-y-auto max-h-[60vh] -mx-1 px-1">
             <div className="space-y-6 py-2">
               {/* Nível 1 — Tipo de Taxa */}
               <section className="space-y-2">
@@ -391,7 +390,7 @@ const RateManagerDialog = () => {
                 </section>
               )}
             </div>
-          </ScrollArea>
+          </div>
 
           <DialogFooter>
             <Button variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
