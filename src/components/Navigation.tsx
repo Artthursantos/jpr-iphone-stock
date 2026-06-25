@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Package, Calculator, Shuffle, Tag } from "lucide-react";
+import { Package, Calculator, Shuffle, Tag, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Navigation = () => {
@@ -32,6 +32,12 @@ const Navigation = () => {
       icon: Shuffle,
       badge: "BETA",
       viewTransition: false,
+    },
+    {
+      name: "Seal Care & Shield",
+      path: "/seal-care-shield",
+      icon: ShieldCheck,
+      viewTransition: true,
     },
   ];
 

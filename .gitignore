@@ -30,3 +30,6 @@ credentialsgoogle.json
 debug.json
 sample_output.json
 supabase/.temp/
+
+*.csv
+.dev-server.pid
