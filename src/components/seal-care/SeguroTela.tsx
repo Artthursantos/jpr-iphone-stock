@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Accordion,
@@ -6,7 +6,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { ShieldCheck, Smartphone, Wrench, Lock } from "lucide-react";
+import {
+  ShieldCheck,
+  Smartphone,
+  Wrench,
+  Lock,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import {
   PARAMETROS_SEGURO,
   REGRAS_SEGURO,
@@ -21,6 +28,18 @@ import {
 const SeguroTela = () => {
   const tabela = useMemo(() => montarTabelaSeguro(), []);
   const anualPix = valorAnualComDesconto();
+
+  // Por padrão mostra só até o iPhone 17 Pro Max; o resto (Mac/iPad/Watch)
+  // fica atrás do "Ver mais".
+  const [mostrarTodos, setMostrarTodos] = useState(false);
+  const indiceCorte = useMemo(
+    () => tabela.findIndex((l) => l.modelo === "iPhone 17 Pro Max"),
+    [tabela],
+  );
+  const linhasVisiveis = mostrarTodos
+    ? tabela
+    : tabela.slice(0, indiceCorte + 1);
+  const ocultos = tabela.length - (indiceCorte + 1);
 
   return (
     <div className="space-y-6">
@@ -106,7 +125,7 @@ const SeguroTela = () => {
                 </tr>
               </thead>
               <tbody>
-                {tabela.map((linha) => (
+                {linhasVisiveis.map((linha) => (
                   <tr
                     key={linha.modelo}
                     className="border-b border-border/50 hover:bg-accent/50 transition-colors"
@@ -116,7 +135,7 @@ const SeguroTela = () => {
                     <td className="py-3 px-2 text-right text-primary font-semibold">
                       {formatBRL(linha.franquia)}
                     </td>
-                    <td className="py-3 px-2 text-right text-muted-foreground line-through">
+                    <td className="py-3 px-2 text-right text-muted-foreground">
                       {formatBRL(linha.precoMercado)}
                     </td>
                     <td className="py-3 px-2 text-right text-green-500 font-semibold">
@@ -127,6 +146,29 @@ const SeguroTela = () => {
                     </td>
                   </tr>
                 ))}
+                {ocultos > 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-0">
+                      <button
+                        type="button"
+                        onClick={() => setMostrarTodos((v) => !v)}
+                        className="flex w-full items-center justify-center gap-1 py-3 text-sm font-medium text-primary hover:bg-accent/50 transition-colors"
+                      >
+                        {mostrarTodos ? (
+                          <>
+                            Ver menos
+                            <ChevronUp className="h-4 w-4" />
+                          </>
+                        ) : (
+                          <>
+                            Ver mais ({ocultos} modelos)
+                            <ChevronDown className="h-4 w-4" />
+                          </>
+                        )}
+                      </button>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
