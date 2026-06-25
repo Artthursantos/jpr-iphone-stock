@@ -9,6 +9,7 @@ import Pricing from "./pages/Pricing";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import Matching from "./pages/Matching";
+import SealCareShield from "./pages/SealCareShield";
 import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -55,6 +56,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <Pricing />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/seal-care-shield",
+        element: (
+          <ProtectedRoute>
+            <SealCareShield />
           </ProtectedRoute>
         ),
       },
